@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Area, AreaChart, CartesianGrid, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine } from "recharts";
 import { Badge, Button, Card, PanelHeader } from "react-bits";
+import { BarChart3, MapPin, RefreshCw, Target } from "lucide-react";
 import { DiscoveryDashboard, fetchDiscoveryDashboard } from "../api";
 import { useUIStore } from "../store/uiStore";
 
@@ -21,7 +22,7 @@ function GapVsTargetChart({ data, month }: { data: DiscoveryDashboard["gap_times
   return (
     <Card>
       <PanelHeader title={`${month} daily trend`} eyebrow="Gap vs Target" />
-      <div className="h-64">
+      <div className="h-64" aria-label={`Gap vs Target for ${month}`}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={chartData}>
             <defs>
@@ -247,40 +248,71 @@ export default function DiscoveryScreen() {
 
   const selectedOpportunity = dashboard.data?.opportunities.find((o) => o.id === selectedOpportunityId);
 
+  const darkCard = "bg-slate-900 border border-slate-800 text-slate-100";
+
   return (
-    <div className="flex flex-col gap-4">
-      <Card className="space-y-4">
-        <PanelHeader title={`Discovery — ${monthLabel}`} eyebrow="Overview" />
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1 text-sm text-slate-700">
-            <span className="text-xs text-muted">Month</span>
+    <div className="min-h-screen bg-slate-950 px-4 py-6 text-slate-100 md:px-8">
+      <div className={`flex flex-col gap-3 rounded-2xl p-5 shadow-card ${darkCard}`}>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-400">Discovery</p>
+            <h1 className="text-2xl font-semibold text-slate-50">{monthLabel}</h1>
+            <p className="text-sm text-slate-400">Overview of gaps, context signals and top opportunities.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="border border-slate-700 bg-slate-800 text-slate-100 hover:bg-slate-700"
+              onClick={() => dashboard.refetch()}
+              disabled={dashboard.isFetching}
+              aria-label="Refresh"
+            >
+              <RefreshCw className="h-4 w-4" />
+              <span className="ml-1">{dashboard.isFetching ? "Refreshing..." : "Refresh"}</span>
+            </Button>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-[repeat(auto-fit,minmax(160px,1fr))]">
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
+              <Target className="h-4 w-4 text-primary-400" />
+              <span>Month</span>
+            </div>
             <select
               value={month}
               onChange={(e) => setMonth(e.target.value)}
-              className="rounded-lg border border-border bg-white px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
+              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               {months.map((m) => (
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm text-slate-700">
-            <span className="text-xs text-muted">Geo</span>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
+              <MapPin className="h-4 w-4 text-primary-400" />
+              <span>Geo</span>
+            </div>
             <select
               value={geo}
               onChange={(e) => setGeo(e.target.value)}
-              className="rounded-lg border border-border bg-white px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
+              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               {geos.map((g) => (
                 <option key={g} value={g}>{g}</option>
               ))}
             </select>
-          </label>
-          <Button onClick={() => dashboard.refetch()} disabled={dashboard.isFetching}>
-            {dashboard.isFetching ? "Refreshing..." : "Refresh"}
-          </Button>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
+              <BarChart3 className="h-4 w-4 text-primary-400" />
+              <span>Summary</span>
+            </div>
+            <p className="mt-2 text-sm text-slate-200">Discovery insights for {geo}</p>
+          </div>
         </div>
-      </Card>
+      </div>
 
       {dashboard.isLoading && <Card>Loading discovery data...</Card>}
       {dashboard.error && <Card className="border-error-500 text-error-600">Failed to load discovery data.</Card>}
@@ -289,28 +321,39 @@ export default function DiscoveryScreen() {
         <>
           <div className="grid gap-4 md:grid-cols-3">
             {summaryCards.map((card) => (
-              <Card key={card.label} className="space-y-1">
-                <p className="text-sm text-muted">{card.label}</p>
-                <div className="flex items-baseline gap-2">
-                  <p className="text-2xl font-semibold text-slate-900">{card.value}</p>
+              <Card key={card.label} className={`space-y-2 shadow-card ${darkCard}`}>
+                <p className="text-xs uppercase tracking-wide text-slate-400">{card.label}</p>
+                <div className="flex items-center gap-3">
+                  <p className="text-2xl font-semibold text-slate-50">{card.value}</p>
                   {card.badge && <Badge tone="warn">{card.badge}</Badge>}
                 </div>
               </Card>
             ))}
           </div>
 
-          <GapVsTargetChart data={dashboard.data.gap_timeseries} month={month} />
+          <Card className={`shadow-card ${darkCard}`}>
+            <PanelHeader title="Performance gap analysis" eyebrow="Actual vs Target" />
+            <GapVsTargetChart data={dashboard.data.gap_timeseries} month={month} />
+          </Card>
 
           <div className="grid gap-4 lg:grid-cols-3">
-            <DepartmentHeatmap data={dashboard.data.heatmap as HeatmapDatum[]} />
-            <ContextWidget context={dashboard.data.context} />
-            <OpportunitiesList
-              opportunities={dashboard.data.opportunities}
-              onSelect={(opp) => setSelected(opp.id)}
-            />
+            <Card className={darkCard}>
+              <DepartmentHeatmap data={dashboard.data.heatmap as HeatmapDatum[]} />
+            </Card>
+            <Card className={darkCard}>
+              <ContextWidget context={dashboard.data.context} />
+            </Card>
+            <Card className={darkCard}>
+              <OpportunitiesList
+                opportunities={dashboard.data.opportunities}
+                onSelect={(opp) => setSelected(opp.id)}
+              />
+            </Card>
           </div>
 
-          <OpportunityDetails opportunity={selectedOpportunity} />
+          <Card className={darkCard}>
+            <OpportunityDetails opportunity={selectedOpportunity} />
+          </Card>
         </>
       )}
     </div>

@@ -1,5 +1,6 @@
 import React from "react";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, SelectHTMLAttributes } from "react";
+import { CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 
 function cx(...classes: Array<string | undefined | false | null>) {
   return classes.filter(Boolean).join(" ");
@@ -118,7 +119,7 @@ export const Table: React.FC<{ headers: string[]; children: React.ReactNode; cla
 );
 
 export const TableRow: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2 px-4 py-3 text-sm text-slate-900" role="row">
+  <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2 px-4 py-3 text-sm text-slate-900 hover:bg-surface-50" role="row">
     {children}
   </div>
 );
@@ -130,3 +131,19 @@ export const PillList: React.FC<{ items: Array<{ label: string; tone?: "muted" |
     ))}
   </div>
 );
+
+export const ValidationIndicator: React.FC<{ status: "PASS" | "WARN" | "BLOCK"; label?: string; className?: string }> = ({
+  status,
+  label,
+  className,
+}) => {
+  const tone =
+    status === "PASS" ? "text-green-700 bg-green-50" : status === "WARN" ? "text-orange-700 bg-orange-50" : "text-red-700 bg-red-50";
+  const Icon = status === "PASS" ? CheckCircle2 : status === "WARN" ? AlertTriangle : XCircle;
+  return (
+    <span className={cx("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold", tone, className)}>
+      <Icon className="h-4 w-4" />
+      {label ?? status}
+    </span>
+  );
+};

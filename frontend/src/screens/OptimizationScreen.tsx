@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Badge, Button, Card, PanelHeader, Input, TextArea } from "react-bits";
+import { Target, Sparkles } from "lucide-react";
 import { PromoScenario, optimizeScenarios, getFrontier } from "../api";
 import { ScatterChart, Scatter, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
 import { useUIStore } from "../store/uiStore";
@@ -51,9 +52,23 @@ export default function OptimizationScreen() {
   );
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-2 rounded-2xl border border-border bg-white p-5 shadow-card">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted">Optimization</p>
+            <h1 className="text-2xl font-semibold text-slate-900">Efficient frontier</h1>
+            <p className="text-sm text-muted">Tune constraints and generate ranked scenarios.</p>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted">
+            <Target className="h-4 w-4 text-primary-600" />
+            <span>Guardrails: margin ≥ {minMargin}%, discount ≤ {maxDiscount}%</span>
+          </div>
+        </div>
+      </div>
+
       <Card>
-        <PanelHeader title="Objectives & constraints" eyebrow="Optimization" />
+        <PanelHeader title="Objectives & constraints" eyebrow="Controls" />
         <div className="grid gap-3 md:grid-cols-3">
           <label className="flex flex-col gap-1 text-sm text-slate-700">
             <span className="text-xs text-muted">Brief</span>
@@ -87,10 +102,13 @@ export default function OptimizationScreen() {
           <PanelHeader title="Recommended scenarios" eyebrow="Ranked" />
           {scenarios.length === 0 && <p className="text-sm text-muted">No scenarios yet. Generate to see recommendations.</p>}
           <ul className="divide-y divide-border/60">
-            {recommendations.map((rec) => (
+            {recommendations.map((rec, idx) => (
               <li key={rec.id} className="flex items-center justify-between py-3">
                 <div>
-                  <p className="font-semibold text-slate-900">{rec.label}</p>
+                  <p className="font-semibold text-slate-900 flex items-center gap-2">
+                    <span className="rounded-full bg-primary-50 px-2 py-1 text-xs text-primary-700">#{idx + 1}</span>
+                    {rec.label}
+                  </p>
                   <p className="text-xs text-muted">{rec.type}</p>
                   <p className="text-xs text-muted">Depts: {rec.departments || "—"}</p>
                 </div>
@@ -102,7 +120,7 @@ export default function OptimizationScreen() {
 
         <Card>
           <PanelHeader title="Efficient frontier" eyebrow="Sales vs Margin" />
-          <div className="h-64">
+          <div className="h-64" aria-label="Efficient frontier scatter plot">
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart>
                 <CartesianGrid />

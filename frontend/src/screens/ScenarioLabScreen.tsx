@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Badge, Button, Card, PanelHeader, Table, TableRow, Input, TextArea } from "react-bits";
+import { useForm } from "react-hook-form";
+import { Badge, Button, Card, PanelHeader, Table, TableRow, Input, TextArea, ValidationIndicator } from "react-bits";
 import {
   PromoBrief,
   PromoScenario,
@@ -18,33 +19,55 @@ type ScenarioRow = {
   validation?: ValidationReport;
 };
 
-const defaultBrief: PromoBrief = {
-  month: "2024-10",
-  promo_date_range: { start_date: "2024-10-01", end_date: "2024-10-31" },
-  focus_departments: ["TV", "GAMING"],
-  objectives: { sales: 1.0 },
-  constraints: { max_discount: 0.25, min_margin: 0.18 },
+type ScenarioForm = {
+  month: string;
+  start_date: string;
+  end_date: string;
+  departments: string;
+  scenario_type: string;
+  objectives_notes: string;
+  max_discount: number;
+  min_margin: number;
 };
 
 export default function ScenarioLabScreen() {
-  const [brief, setBrief] = useState<PromoBrief>(defaultBrief);
-  const [scenarioType, setScenarioType] = useState("balanced");
   const [scenarios, setScenarios] = useState<ScenarioRow[]>([]);
   const toggleScenario = useUIStore((s) => s.toggleActiveScenario);
   const setChatContext = useUIStore((s) => s.setChatContext);
   const [focusId, setFocusId] = useState<string | undefined>();
 
+  const form = useForm<ScenarioForm>({
+    defaultValues: {
+      month: "2024-10",
+      start_date: "2024-10-01",
+      end_date: "2024-10-31",
+      departments: "TV, GAMING",
+      scenario_type: "balanced",
+      objectives_notes: "Drive sales uplift while holding 18% margin",
+      max_discount: 25,
+      min_margin: 18,
+    },
+  });
+
   const createMutation = useMutation({
-    mutationFn: async () => {
-      const sc = await createScenarioFromBrief(brief, scenarioType);
+    mutationFn: async (values: ScenarioForm) => {
+      const brief: PromoBrief = {
+        month: values.month,
+        promo_date_range: { start_date: values.start_date, end_date: values.end_date },
+        focus_departments: values.departments.split(",").map((d) => d.trim()).filter(Boolean),
+        objectives: { notes: values.objectives_notes },
+        constraints: { max_discount: values.max_discount / 100, min_margin: values.min_margin / 100 },
+      };
+      const sc = await createScenarioFromBrief(brief, values.scenario_type);
       const kpi = await evaluateScenario(sc);
       const validation = await validateScenario(sc);
-      return { sc, kpi, validation };
+      return { sc, kpi, validation, values };
     },
-    onSuccess: ({ sc, kpi, validation }) => {
+    onSuccess: ({ sc, kpi, validation, values }) => {
       setScenarios((prev) => [{ scenario: sc, kpi, validation }, ...prev]);
       setFocusId(sc.id || sc.label);
-      setChatContext({ screen: "scenario", active_scenarios: [sc.id || ""], metadata: { month: brief.month, type: scenarioType } });
+      setChatContext({ screen: "scenario", active_scenarios: [sc.id || ""], metadata: { month: values.month, type: values.scenario_type } });
+      form.reset({ ...values, departments: values.departments });
     },
   });
 
@@ -71,101 +94,102 @@ export default function ScenarioLabScreen() {
   }, [focusedScenario?.kpi]);
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card>
-        <PanelHeader title="Scenario configuration" eyebrow="Scenario Lab" />
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="flex flex-col gap-1 text-sm text-slate-700">
-            <span className="text-xs text-muted">Month</span>
-            <Input
-              value={brief.month}
-              onChange={(e) => setBrief({ ...brief, month: e.target.value })}
-              aria-label="Month"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm text-slate-700">
-            <span className="text-xs text-muted">Promo window</span>
-            <Input
-              value={`${brief.promo_date_range?.start_date} → ${brief.promo_date_range?.end_date}`}
-              onChange={(e) => {
-                const [start, end] = e.target.value.split("→").map((v) => v.trim());
-                setBrief({ ...brief, promo_date_range: { start_date: start || "", end_date: end || "" } });
-              }}
-              aria-label="Promo window"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm text-slate-700">
-            <span className="text-xs text-muted">Departments (comma separated)</span>
-            <Input
-              defaultValue={(brief.focus_departments || []).join(", ")}
-              onChange={(e) => setBrief({ ...brief, focus_departments: e.target.value.split(",").map((d) => d.trim()).filter(Boolean) })}
-              aria-label="Departments"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm text-slate-700">
-            <span className="text-xs text-muted">Scenario type</span>
-            <select
-              value={scenarioType}
-              onChange={(e) => setScenarioType(e.target.value)}
-              className="rounded-lg border border-border bg-white px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
-            >
-              <option value="balanced">Balanced</option>
-              <option value="aggressive">Aggressive</option>
-              <option value="conservative">Conservative</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm text-slate-700 md:col-span-2">
-            <span className="text-xs text-muted">Objectives / notes</span>
-            <TextArea
-              value={brief.objectives?.notes || "Drive sales uplift while holding 18% margin"}
-              onChange={(e) =>
-                setBrief({
-                  ...brief,
-                  objectives: { ...(brief.objectives || {}), notes: e.target.value },
-                })
-              }
-              rows={3}
-              aria-label="Objectives notes"
-            />
-          </label>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
-            {createMutation.isPending ? "Generating..." : "Create & Evaluate"}
-          </Button>
-        </div>
-      </Card>
+    <div className="flex flex-col gap-5">
+      <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+        <Card>
+          <form onSubmit={form.handleSubmit((values) => createMutation.mutate(values))} className="space-y-4">
+            <PanelHeader title="Scenario configuration" eyebrow="Scenario Lab" />
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="flex flex-col gap-1 text-sm text-slate-700">
+                <span className="text-xs text-muted">Month</span>
+                <Input aria-label="Month" {...form.register("month")} />
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-1 text-sm text-slate-700">
+                  <span className="text-xs text-muted">Start date</span>
+                  <Input type="date" aria-label="Start date" {...form.register("start_date")} />
+                </label>
+                <label className="flex flex-col gap-1 text-sm text-slate-700">
+                  <span className="text-xs text-muted">End date</span>
+                  <Input type="date" aria-label="End date" {...form.register("end_date")} />
+                </label>
+              </div>
+              <label className="flex flex-col gap-1 text-sm text-slate-700">
+                <span className="text-xs text-muted">Departments (comma separated)</span>
+                <Input aria-label="Departments" {...form.register("departments")} />
+              </label>
+              <label className="flex flex-col gap-1 text-sm text-slate-700">
+                <span className="text-xs text-muted">Scenario type</span>
+                <select
+                  aria-label="Scenario type"
+                  className="rounded-lg border border-border bg-white px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
+                  {...form.register("scenario_type")}
+                >
+                  <option value="balanced">Balanced</option>
+                  <option value="aggressive">Aggressive</option>
+                  <option value="conservative">Conservative</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-sm text-slate-700">
+                <span className="text-xs text-muted">Max discount (%)</span>
+                <Input type="number" min={0} max={100} step={1} aria-label="Max discount" {...form.register("max_discount", { valueAsNumber: true })} />
+              </label>
+              <label className="flex flex-col gap-1 text-sm text-slate-700">
+                <span className="text-xs text-muted">Min margin (%)</span>
+                <Input type="number" min={0} max={100} step={1} aria-label="Min margin" {...form.register("min_margin", { valueAsNumber: true })} />
+              </label>
+              <label className="flex flex-col gap-1 text-sm text-slate-700 md:col-span-2">
+                <span className="text-xs text-muted">Objectives / notes</span>
+                <TextArea rows={3} aria-label="Objectives notes" {...form.register("objectives_notes")} />
+              </label>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? "Generating..." : "Create & Evaluate"}
+              </Button>
+            </div>
+          </form>
+        </Card>
 
-      <Card>
-        <PanelHeader title="Scenario comparison" eyebrow="KPIs & validation" />
-        {scenarios.length === 0 && <p className="text-sm text-muted">No scenarios yet. Generate one to compare KPIs.</p>}
-        {scenarios.length > 0 && (
-          <Table headers={["Scenario", "Sales", "Margin", "EBIT", "Status", "Select"]}>
-            {scenarios.map((row) => (
-              <TableRow key={row.scenario.id || row.scenario.label}>
-                <div className="space-y-1">
-                  <p className="font-semibold">{row.scenario.label || row.scenario.name || "Scenario"}</p>
-                  <p className="text-xs text-muted">{row.scenario.scenario_type}</p>
-                </div>
-                <span>{Math.round(row.kpi?.total_sales || 0).toLocaleString()}</span>
-                <span>{Math.round(row.kpi?.total_margin || 0).toLocaleString()}</span>
-                <span>{Math.round(row.kpi?.total_ebit || 0).toLocaleString()}</span>
-                <Badge tone={row.validation?.status === "PASS" ? "success" : row.validation?.status === "WARN" ? "warn" : "muted"}>
-                  {row.validation?.status || "PENDING"}
-                </Badge>
-                <div className="flex flex-col gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => { toggleScenario(row.scenario.id || ""); setFocusId(row.scenario.id || row.scenario.label); }}>
-                    Track
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setFocusId(row.scenario.id || row.scenario.label)} aria-label="Focus scenario">
-                    Details
-                  </Button>
-                </div>
-              </TableRow>
-            ))}
-          </Table>
-        )}
-      </Card>
+        <Card>
+          <PanelHeader title="Scenario comparison" eyebrow="KPIs & validation" />
+          {scenarios.length === 0 && <p className="text-sm text-muted">No scenarios yet. Generate one to compare KPIs.</p>}
+          {scenarios.length > 0 && (
+            <Table headers={["Scenario", "Sales", "Margin", "EBIT", "Status", "Select"]}>
+              {scenarios.map((row) => {
+                const isFocused = (row.scenario.id || row.scenario.label) === focusId;
+                return (
+                  <TableRow key={row.scenario.id || row.scenario.label}>
+                    <div className="space-y-1">
+                      <p className="font-semibold">{row.scenario.label || row.scenario.name || "Scenario"}</p>
+                      <p className="text-xs text-muted">{row.scenario.scenario_type}</p>
+                    </div>
+                    <span>{Math.round(row.kpi?.total_sales || 0).toLocaleString()}</span>
+                    <span>{Math.round(row.kpi?.total_margin || 0).toLocaleString()}</span>
+                    <span>{Math.round(row.kpi?.total_ebit || 0).toLocaleString()}</span>
+                    <ValidationIndicator status={(row.validation?.status as "PASS" | "WARN" | "BLOCK") || "BLOCK"} label={row.validation?.status || "PENDING"} />
+                    <div className="flex flex-col gap-1">
+                      <Button
+                        variant={isFocused ? "secondary" : "ghost"}
+                        size="sm"
+                        onClick={() => {
+                          toggleScenario(row.scenario.id || "");
+                          setFocusId(row.scenario.id || row.scenario.label);
+                        }}
+                      >
+                        {isFocused ? "Focused" : "Track"}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setFocusId(row.scenario.id || row.scenario.label)} aria-label="Focus scenario">
+                        Details
+                      </Button>
+                    </div>
+                  </TableRow>
+                );
+              })}
+            </Table>
+          )}
+        </Card>
+      </div>
 
       {focusedScenario && (
         <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
@@ -193,9 +217,10 @@ export default function ScenarioLabScreen() {
           <Card>
             <PanelHeader title="Validation" eyebrow="Readiness" />
             <div className="space-y-2">
-              <Badge tone={focusedScenario.validation?.status === "PASS" ? "success" : focusedScenario.validation?.status === "WARN" ? "warn" : "muted"}>
-                {focusedScenario.validation?.status || "PENDING"}
-              </Badge>
+              <ValidationIndicator
+                status={(focusedScenario.validation?.status as "PASS" | "WARN" | "BLOCK") || "BLOCK"}
+                label={focusedScenario.validation?.status || "PENDING"}
+              />
               <p className="text-sm text-slate-700">Score: {Math.round((focusedScenario.validation?.overall_score || 0) * 100) / 100}</p>
               <div className="space-y-1">
                 <p className="text-xs uppercase tracking-wide text-muted">Issues</p>

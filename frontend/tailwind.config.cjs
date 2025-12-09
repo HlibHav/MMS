@@ -9,47 +9,41 @@ module.exports = {
     extend: {
       colors: {
         primary: {
-          50: "#e6f3ff",
-          100: "#cce7ff",
-          200: "#99ceff",
-          300: "#66b6ff",
-          400: "#339dff",
+          50: "#f0f9ff",
           500: "#0ea5e9",
           600: "#0284c7",
           700: "#0369a1",
-          800: "#024a74",
-          900: "#012c47",
+        },
+        success: {
+          500: "#10b981",
+          600: "#059669",
+        },
+        warning: {
+          500: "#f59e0b",
+          600: "#d97706",
+        },
+        error: {
+          500: "#ef4444",
+          600: "#dc2626",
+        },
+        gray: {
+          50: "#f9fafb",
+          100: "#f3f4f6",
+          500: "#6b7280",
+          900: "#111827",
         },
         surface: {
-          50: "#f8fafc",
-          100: "#f1f5f9",
-          200: "#e2e8f0",
-          300: "#cbd5e1",
+          50: "#f9fafb",
+          100: "#f3f4f6",
+          200: "#e5e7eb",
+          300: "#d1d5db",
         },
         slate: {
           700: "#334155",
           800: "#1e293b",
           900: "#0f172a",
         },
-        success: {
-          50: "#ecfdf3",
-          500: "#10b981",
-          600: "#059669",
-          700: "#047857",
-        },
-        warning: {
-          50: "#fffaeb",
-          500: "#f59e0b",
-          600: "#d97706",
-          700: "#b45309",
-        },
-        error: {
-          50: "#fef2f2",
-          500: "#ef4444",
-          600: "#dc2626",
-          700: "#b91c1c",
-        },
-        border: "#e2e8f0",
+        border: "#e5e7eb",
         muted: "#6b7280",
       },
       fontFamily: {
@@ -57,10 +51,11 @@ module.exports = {
       },
       borderRadius: {
         xl: "1rem",
+        "2xl": "1.25rem",
       },
       boxShadow: {
-        card: "0 4px 24px rgba(15, 23, 42, 0.08)",
-        hover: "0 16px 40px rgba(15, 23, 42, 0.12)",
+        card: "0 8px 28px rgba(15, 23, 42, 0.08)",
+        hover: "0 12px 32px rgba(15, 23, 42, 0.12)",
       },
       spacing: {
         18: "4.5rem",
@@ -68,6 +63,7 @@ module.exports = {
       },
       maxWidth: {
         content: "1200px",
+        wide: "1400px",
       },
       transitionTimingFunction: {
         "soft-out": "cubic-bezier(0.22, 1, 0.36, 1)",

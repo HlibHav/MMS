@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button, Card, PanelHeader, Badge, Input, TextArea } from "react-bits";
+import { Sparkles, FileText } from "lucide-react";
 import { AssetSpec, CreativeBrief, PromoScenario, generateCreativeAssets, generateCreativeBrief } from "../api";
 import { useUIStore } from "../store/uiStore";
 
@@ -48,16 +49,33 @@ export default function CreativeScreen() {
   );
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-2 rounded-2xl border border-border bg-white p-5 shadow-card">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted">Creative Companion</p>
+            <h1 className="text-2xl font-semibold text-slate-900">Brief & assets</h1>
+            <p className="text-sm text-muted">Generate briefs and assets for selected scenario.</p>
+          </div>
+          <div className="inline-flex items-center gap-2 rounded-full bg-primary-50 px-3 py-1 text-xs font-semibold text-primary-700">
+            <Sparkles className="h-4 w-4" /> AI assisted
+          </div>
+        </div>
+      </div>
+
       <Card className="space-y-4">
-        <PanelHeader title="Creative Brief" eyebrow="Creative Companion" />
+        <PanelHeader title="Creative Brief" eyebrow="Inputs" />
         <div className="grid gap-3 md:grid-cols-2">
           <label className="flex flex-col gap-1 text-sm text-slate-700">
             <span className="text-xs text-muted">Scenario ID</span>
             <Input value={scenarioId} onChange={(e) => setScenarioId(e.target.value)} aria-label="Scenario ID" />
           </label>
+          <label className="flex flex-col gap-1 text-sm text-slate-700">
+            <span className="text-xs text-muted">Notes to emphasize</span>
+            <TextArea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} aria-label="Creative notes inline" />
+          </label>
         </div>
-        <div className="mt-3 flex gap-2">
+        <div className="mt-2 flex flex-wrap gap-2">
           <Button onClick={() => briefMutation.mutate()} disabled={briefMutation.isPending}>
             {briefMutation.isPending ? "Generating..." : "Generate Brief"}
           </Button>
@@ -103,9 +121,15 @@ export default function CreativeScreen() {
           <div className="grid gap-3 md:grid-cols-3">
             {assets.map((asset) => (
               <div key={asset.asset_type} className="rounded-xl border border-border bg-surface-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted">{asset.asset_type}</p>
-                <p className="text-sm text-slate-900 whitespace-pre-wrap">{asset.copy_text}</p>
-                <Button variant="ghost" size="sm" className="mt-2">Copy</Button>
+                <div className="flex items-center justify-between text-xs uppercase tracking-wide text-muted">
+                  <span>{asset.asset_type}</span>
+                  <FileText className="h-4 w-4 text-primary-600" />
+                </div>
+                <p className="mt-2 text-sm text-slate-900 whitespace-pre-wrap">{asset.copy_text}</p>
+                <div className="mt-3 flex gap-2">
+                  <Button variant="ghost" size="sm">Copy</Button>
+                  <Button variant="ghost" size="sm">Export</Button>
+                </div>
               </div>
             ))}
           </div>
