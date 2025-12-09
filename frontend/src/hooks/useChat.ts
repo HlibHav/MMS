@@ -4,6 +4,6 @@ import { ChatMessageRequest, ChatMessageResponse } from '../types'
 
 export const useChat = () =>
   useMutation<ChatMessageResponse, unknown, ChatMessageRequest>({
-    mutationFn: (payload) => chatApi.message(payload),
+    mutationFn: (payload) => chatApi.message(payload) as Promise<ChatMessageResponse>,
   })
 

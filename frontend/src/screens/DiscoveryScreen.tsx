@@ -70,7 +70,7 @@ function DepartmentHeatmap({ data }: { data: HeatmapDatum[] }) {
   return (
     <Card>
       <PanelHeader title="Gap heatmap" eyebrow="Departments" />
-      <div className="mb-2 flex items-center gap-2 text-xs text-gray-600">
+      <div className="mb-2 flex items-center gap-2 text-xs text-slate-600">
         <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-amber-700">+15% gap</span>
         <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-1 text-orange-700">+5% gap</span>
         <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-green-700">On target / ahead</span>
@@ -104,35 +104,35 @@ function ContextWidget({ context }: { context: DiscoveryDashboard["context"] }) 
           {context.date_range.start_date} → {context.date_range.end_date}
         </Badge>
       </div>
-      <div className="space-y-2 rounded-xl bg-gray-50 p-3">
-        <p className="text-sm text-gray-700">{context.weather?.summary ?? "Weather data pending"}</p>
+      <div className="space-y-2 rounded-xl bg-surface-50 p-3">
+        <p className="text-sm text-slate-700">{context.weather?.summary ?? "Weather data pending"}</p>
         {context.weather?.temperature && (
-          <p className="text-xs text-gray-500">Temp: {context.weather.temperature} · Humidity: {context.weather.humidity}</p>
+          <p className="text-xs text-muted">Temp: {context.weather.temperature} · Humidity: {context.weather.humidity}</p>
         )}
       </div>
       <div className="mt-3 space-y-2">
-        <p className="text-xs uppercase tracking-wide text-gray-500">Events</p>
-        <ul className="space-y-1 text-sm text-gray-900">
+        <p className="text-xs uppercase tracking-wide text-muted">Events</p>
+        <ul className="space-y-1 text-sm text-slate-900">
           {context.events?.map((event) => (
             <li key={`${event.name}-${event.date}`} className="flex items-center justify-between">
               <span className="font-medium">{event.name}</span>
-              <span className="text-xs text-gray-500">{event.type} · {event.date}</span>
+              <span className="text-xs text-muted">{event.type} · {event.date}</span>
             </li>
           )) || <li>No events</li>}
         </ul>
       </div>
       <div className="mt-4 grid gap-2 md:grid-cols-2">
         <div>
-          <p className="text-xs uppercase tracking-wide text-gray-500">Seasonality</p>
-          <p className="text-sm text-gray-700">
+          <p className="text-xs uppercase tracking-wide text-muted">Seasonality</p>
+          <p className="text-sm text-slate-700">
             {Object.entries(context.seasonality?.weekly_patterns || {})
               .map(([k, v]) => `${k.substring(0, 3)} ${v}`)
               .join(", ") || "n/a"}
           </p>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-wide text-gray-500">Weekend patterns</p>
-          <p className="text-sm text-gray-700">
+          <p className="text-xs uppercase tracking-wide text-muted">Weekend patterns</p>
+          <p className="text-sm text-slate-700">
             {Object.entries(context.weekend_patterns || {})
               .map(([k, v]) => `${k}: ${v}`)
               .join(", ") || "n/a"}
@@ -160,13 +160,13 @@ function OpportunitiesList({
             key={opp.id}
             onClick={() => onSelect(opp)}
             className={`flex w-full items-start justify-between rounded-xl border px-3 py-2 text-left transition ${
-              selected === opp.id ? "border-primary-500 bg-primary-50" : "border-gray-200 hover:bg-gray-50"
+              selected === opp.id ? "border-primary-500 bg-primary-50" : "border-border hover:bg-surface-50"
             }`}
             aria-pressed={selected === opp.id}
           >
             <div>
-              <p className="font-semibold text-gray-900">{opp.department} — {opp.channel}</p>
-              <p className="text-sm text-gray-600">{opp.rationale}</p>
+              <p className="font-semibold text-slate-900">{opp.department} — {opp.channel}</p>
+              <p className="text-sm text-slate-600">{opp.rationale}</p>
             </div>
             <Badge tone="success">+{currency(opp.estimated_potential)}</Badge>
           </button>
@@ -181,16 +181,16 @@ function OpportunityDetails({ opportunity }: { opportunity?: DiscoveryDashboard[
   return (
     <Card>
       <PanelHeader title="Selected opportunity" eyebrow={opportunity.id} />
-      <div className="space-y-2 text-sm text-gray-800">
+      <div className="space-y-2 text-sm text-slate-800">
         <div className="flex items-center gap-2">
           <Badge tone="info">{opportunity.department}</Badge>
           <Badge tone="muted">{opportunity.channel}</Badge>
         </div>
-        <p className="font-semibold text-gray-900">{opportunity.rationale}</p>
-        <p className="text-gray-600">
+        <p className="font-semibold text-slate-900">{opportunity.rationale}</p>
+        <p className="text-slate-600">
           Window: {opportunity.date_range.start_date} → {opportunity.date_range.end_date}
         </p>
-        <p className="text-gray-700">Estimated potential: {currency(opportunity.estimated_potential)}</p>
+        <p className="text-slate-700">Estimated potential: {currency(opportunity.estimated_potential)}</p>
       </div>
     </Card>
   );
@@ -204,13 +204,16 @@ export default function DiscoveryScreen() {
   const selectedOpportunityId = useUIStore((s) => s.selectedOpportunityId);
   const monthLabel = new Date(`${month}-01`).toLocaleString("en-US", { month: "long", year: "numeric" });
 
-  const dashboard = useQuery({
+  const dashboard = useQuery<DiscoveryDashboard, Error, DiscoveryDashboard, ["discovery-dashboard", string, string]>({
     queryKey: ["discovery-dashboard", month, geo],
     queryFn: () => fetchDiscoveryDashboard(month, geo),
-    onSuccess: (data) => {
-      setContext({ screen: "discovery", metadata: { geo: data.geo, month: data.month } });
-    },
   });
+
+  useEffect(() => {
+    if (dashboard.data) {
+      setContext({ screen: "discovery", metadata: { geo: dashboard.data.geo, month: dashboard.data.month } });
+    }
+  }, [dashboard.data, setContext]);
 
   useEffect(() => {
     if (!dashboard.data) return;
@@ -245,28 +248,28 @@ export default function DiscoveryScreen() {
   const selectedOpportunity = dashboard.data?.opportunities.find((o) => o.id === selectedOpportunityId);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       <Card className="space-y-4">
         <PanelHeader title={`Discovery — ${monthLabel}`} eyebrow="Overview" />
         <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1 text-sm text-gray-700">
-            <span className="text-xs text-gray-500">Month</span>
+          <label className="flex flex-col gap-1 text-sm text-slate-700">
+            <span className="text-xs text-muted">Month</span>
             <select
               value={month}
               onChange={(e) => setMonth(e.target.value)}
-              className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
+              className="rounded-lg border border-border bg-white px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
             >
               {months.map((m) => (
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1 text-sm text-gray-700">
-            <span className="text-xs text-gray-500">Geo</span>
+          <label className="flex flex-col gap-1 text-sm text-slate-700">
+            <span className="text-xs text-muted">Geo</span>
             <select
               value={geo}
               onChange={(e) => setGeo(e.target.value)}
-              className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
+              className="rounded-lg border border-border bg-white px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
             >
               {geos.map((g) => (
                 <option key={g} value={g}>{g}</option>
@@ -280,16 +283,16 @@ export default function DiscoveryScreen() {
       </Card>
 
       {dashboard.isLoading && <Card>Loading discovery data...</Card>}
-      {dashboard.error && <Card className="border-error-500 text-error-500">Failed to load discovery data.</Card>}
+      {dashboard.error && <Card className="border-error-500 text-error-600">Failed to load discovery data.</Card>}
 
       {dashboard.data && (
         <>
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-3">
             {summaryCards.map((card) => (
               <Card key={card.label} className="space-y-1">
-                <p className="text-sm text-gray-500">{card.label}</p>
+                <p className="text-sm text-muted">{card.label}</p>
                 <div className="flex items-baseline gap-2">
-                  <p className="text-2xl font-semibold text-gray-900">{card.value}</p>
+                  <p className="text-2xl font-semibold text-slate-900">{card.value}</p>
                   {card.badge && <Badge tone="warn">{card.badge}</Badge>}
                 </div>
               </Card>
@@ -298,7 +301,7 @@ export default function DiscoveryScreen() {
 
           <GapVsTargetChart data={dashboard.data.gap_timeseries} month={month} />
 
-          <div className="grid gap-3 lg:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-3">
             <DepartmentHeatmap data={dashboard.data.heatmap as HeatmapDatum[]} />
             <ContextWidget context={dashboard.data.context} />
             <OpportunitiesList

@@ -1,5 +1,5 @@
 export const LoadingState = ({ message = 'Loading...' }: { message?: string }) => (
-  <div className="text-sm text-gray-600">{message}</div>
+  <div className="text-sm text-slate-600">{message}</div>
 )
 
 export const ErrorState = ({ message }: { message: string }) => (
@@ -7,6 +7,6 @@ export const ErrorState = ({ message }: { message: string }) => (
 )
 
 export const EmptyState = ({ message }: { message: string }) => (
-  <div className="text-sm text-gray-500">{message}</div>
+  <div className="text-sm text-muted">{message}</div>
 )
 

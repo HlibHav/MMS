@@ -48,12 +48,12 @@ export default function CreativeScreen() {
   );
 
   return (
-    <div className="flex flex-col gap-3">
-      <Card>
+    <div className="flex flex-col gap-4">
+      <Card className="space-y-4">
         <PanelHeader title="Creative Brief" eyebrow="Creative Companion" />
         <div className="grid gap-3 md:grid-cols-2">
-          <label className="flex flex-col gap-1 text-sm text-gray-700">
-            <span className="text-xs text-gray-500">Scenario ID</span>
+          <label className="flex flex-col gap-1 text-sm text-slate-700">
+            <span className="text-xs text-muted">Scenario ID</span>
             <Input value={scenarioId} onChange={(e) => setScenarioId(e.target.value)} aria-label="Scenario ID" />
           </label>
         </div>
@@ -68,43 +68,43 @@ export default function CreativeScreen() {
       </Card>
 
       {brief && (
-        <Card>
+        <Card className="space-y-4">
           <PanelHeader title="Brief details" eyebrow="Draft" />
-          <div className="grid gap-3 md:grid-cols-3 text-sm text-gray-800">
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-gray-500">Objectives</p>
-              <p className="font-semibold text-gray-900">{briefMeta.objectives || "n/a"}</p>
+          <div className="grid gap-3 md:grid-cols-3 text-sm text-slate-800">
+            <div className="rounded-xl border border-border bg-surface-50 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted">Objectives</p>
+              <p className="font-semibold text-slate-900">{briefMeta.objectives || "n/a"}</p>
             </div>
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-gray-500">Tone</p>
-              <p className="font-semibold text-gray-900">{briefMeta.tone || "n/a"}</p>
+            <div className="rounded-xl border border-border bg-surface-50 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted">Tone</p>
+              <p className="font-semibold text-slate-900">{briefMeta.tone || "n/a"}</p>
             </div>
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-gray-500">Audience</p>
-              <p className="font-semibold text-gray-900">{briefMeta.target_audience || "n/a"}</p>
+            <div className="rounded-xl border border-border bg-surface-50 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted">Audience</p>
+              <p className="font-semibold text-slate-900">{briefMeta.target_audience || "n/a"}</p>
             </div>
           </div>
-          <p className="mt-3 text-sm text-gray-900">{brief.messaging}</p>
+          <p className="text-sm text-slate-900">{brief.messaging}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {brief.mandatory_elements.map((el) => (
               <Badge key={el} tone="muted">{el}</Badge>
             ))}
           </div>
           <div className="mt-4">
-            <p className="text-xs uppercase tracking-wide text-gray-500">Notes</p>
+            <p className="text-xs uppercase tracking-wide text-muted">Notes</p>
             <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} aria-label="Creative notes" />
           </div>
         </Card>
       )}
 
       {assets.length > 0 && (
-        <Card>
+        <Card className="space-y-3">
           <PanelHeader title="Generated assets" eyebrow="Copy & layout" />
-          <div className="grid gap-2 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-3">
             {assets.map((asset) => (
-              <div key={asset.asset_type} className="rounded-xl border border-gray-200 p-3">
-                <p className="text-xs uppercase tracking-wide text-gray-500">{asset.asset_type}</p>
-                <p className="text-sm text-gray-900 whitespace-pre-wrap">{asset.copy_text}</p>
+              <div key={asset.asset_type} className="rounded-xl border border-border bg-surface-50 p-3">
+                <p className="text-xs uppercase tracking-wide text-muted">{asset.asset_type}</p>
+                <p className="text-sm text-slate-900 whitespace-pre-wrap">{asset.copy_text}</p>
                 <Button variant="ghost" size="sm" className="mt-2">Copy</Button>
               </div>
             ))}

@@ -1,8 +1,8 @@
 export default function AssetCard({ asset }: { asset: any }) {
   return (
-    <div className="bg-white rounded-lg shadow p-4 border text-sm">
-      <div className="font-semibold mb-1">{asset.asset_type}</div>
-      <div className="text-gray-700">{asset.copy_text}</div>
+    <div className="rounded-lg border border-border bg-white p-4 text-sm shadow-card">
+      <div className="mb-1 font-semibold">{asset.asset_type}</div>
+      <div className="text-slate-700">{asset.copy_text}</div>
     </div>
   )
 }

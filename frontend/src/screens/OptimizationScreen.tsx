@@ -51,24 +51,24 @@ export default function OptimizationScreen() {
   );
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       <Card>
         <PanelHeader title="Objectives & constraints" eyebrow="Optimization" />
         <div className="grid gap-3 md:grid-cols-3">
-          <label className="flex flex-col gap-1 text-sm text-gray-700">
-            <span className="text-xs text-gray-500">Brief</span>
+          <label className="flex flex-col gap-1 text-sm text-slate-700">
+            <span className="text-xs text-muted">Brief</span>
             <Input value={brief} onChange={(e) => setBrief(e.target.value)} aria-label="Optimization brief" />
           </label>
-          <label className="flex flex-col gap-1 text-sm text-gray-700">
-            <span className="text-xs text-gray-500">Min margin %</span>
+          <label className="flex flex-col gap-1 text-sm text-slate-700">
+            <span className="text-xs text-muted">Min margin %</span>
             <Input type="number" value={minMargin} onChange={(e) => setMinMargin(Number(e.target.value))} aria-label="Min margin percent" />
           </label>
-          <label className="flex flex-col gap-1 text-sm text-gray-700">
-            <span className="text-xs text-gray-500">Max discount %</span>
+          <label className="flex flex-col gap-1 text-sm text-slate-700">
+            <span className="text-xs text-muted">Max discount %</span>
             <Input type="number" value={maxDiscount} onChange={(e) => setMaxDiscount(Number(e.target.value))} aria-label="Max discount percent" />
           </label>
-          <label className="flex flex-col gap-1 text-sm text-gray-700 md:col-span-3">
-            <span className="text-xs text-gray-500">Notes</span>
+          <label className="flex flex-col gap-1 text-sm text-slate-700 md:col-span-3">
+            <span className="text-xs text-muted">Notes</span>
             <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} aria-label="Optimization notes" rows={3} />
           </label>
         </div>
@@ -82,17 +82,17 @@ export default function OptimizationScreen() {
         </div>
       </Card>
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <PanelHeader title="Recommended scenarios" eyebrow="Ranked" />
-          {scenarios.length === 0 && <p className="text-sm text-gray-500">No scenarios yet. Generate to see recommendations.</p>}
-          <ul className="divide-y divide-gray-100">
+          {scenarios.length === 0 && <p className="text-sm text-muted">No scenarios yet. Generate to see recommendations.</p>}
+          <ul className="divide-y divide-border/60">
             {recommendations.map((rec) => (
               <li key={rec.id} className="flex items-center justify-between py-3">
                 <div>
-                  <p className="font-semibold text-gray-900">{rec.label}</p>
-                  <p className="text-xs text-gray-500">{rec.type}</p>
-                  <p className="text-xs text-gray-500">Depts: {rec.departments || "—"}</p>
+                  <p className="font-semibold text-slate-900">{rec.label}</p>
+                  <p className="text-xs text-muted">{rec.type}</p>
+                  <p className="text-xs text-muted">Depts: {rec.departments || "—"}</p>
                 </div>
                 <Badge tone="success">Disc {rec.discount}</Badge>
               </li>
@@ -124,21 +124,21 @@ export default function OptimizationScreen() {
 
       <Card>
         <PanelHeader title="Constraint summary" eyebrow="Guards & notes" />
-        <div className="grid gap-3 md:grid-cols-3 text-sm text-gray-800">
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-gray-500">Brief</p>
-            <p className="font-semibold text-gray-900">{brief}</p>
+        <div className="grid gap-3 md:grid-cols-3 text-sm text-slate-800">
+          <div className="rounded-xl border border-border bg-surface-50 p-3">
+            <p className="text-xs uppercase tracking-wide text-muted">Brief</p>
+            <p className="font-semibold text-slate-900">{brief}</p>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-gray-500">Min margin</p>
-            <p className="font-semibold text-gray-900">{minMargin}%</p>
+          <div className="rounded-xl border border-border bg-surface-50 p-3">
+            <p className="text-xs uppercase tracking-wide text-muted">Min margin</p>
+            <p className="font-semibold text-slate-900">{minMargin}%</p>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-gray-500">Max discount</p>
-            <p className="font-semibold text-gray-900">{maxDiscount}%</p>
+          <div className="rounded-xl border border-border bg-surface-50 p-3">
+            <p className="text-xs uppercase tracking-wide text-muted">Max discount</p>
+            <p className="font-semibold text-slate-900">{maxDiscount}%</p>
           </div>
         </div>
-        <p className="mt-3 text-sm text-gray-700">{notes}</p>
+        <p className="mt-3 text-sm text-slate-700">{notes}</p>
       </Card>
     </div>
   );

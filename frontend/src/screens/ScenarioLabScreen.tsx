@@ -71,20 +71,20 @@ export default function ScenarioLabScreen() {
   }, [focusedScenario?.kpi]);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       <Card>
         <PanelHeader title="Scenario configuration" eyebrow="Scenario Lab" />
         <div className="grid gap-3 md:grid-cols-2">
-          <label className="flex flex-col gap-1 text-sm text-gray-700">
-            <span className="text-xs text-gray-500">Month</span>
+          <label className="flex flex-col gap-1 text-sm text-slate-700">
+            <span className="text-xs text-muted">Month</span>
             <Input
               value={brief.month}
               onChange={(e) => setBrief({ ...brief, month: e.target.value })}
               aria-label="Month"
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm text-gray-700">
-            <span className="text-xs text-gray-500">Promo window</span>
+          <label className="flex flex-col gap-1 text-sm text-slate-700">
+            <span className="text-xs text-muted">Promo window</span>
             <Input
               value={`${brief.promo_date_range?.start_date} → ${brief.promo_date_range?.end_date}`}
               onChange={(e) => {
@@ -94,28 +94,28 @@ export default function ScenarioLabScreen() {
               aria-label="Promo window"
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm text-gray-700">
-            <span className="text-xs text-gray-500">Departments (comma separated)</span>
+          <label className="flex flex-col gap-1 text-sm text-slate-700">
+            <span className="text-xs text-muted">Departments (comma separated)</span>
             <Input
               defaultValue={(brief.focus_departments || []).join(", ")}
               onChange={(e) => setBrief({ ...brief, focus_departments: e.target.value.split(",").map((d) => d.trim()).filter(Boolean) })}
               aria-label="Departments"
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm text-gray-700">
-            <span className="text-xs text-gray-500">Scenario type</span>
+          <label className="flex flex-col gap-1 text-sm text-slate-700">
+            <span className="text-xs text-muted">Scenario type</span>
             <select
               value={scenarioType}
               onChange={(e) => setScenarioType(e.target.value)}
-              className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
+              className="rounded-lg border border-border bg-white px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
             >
               <option value="balanced">Balanced</option>
               <option value="aggressive">Aggressive</option>
               <option value="conservative">Conservative</option>
             </select>
           </label>
-          <label className="flex flex-col gap-1 text-sm text-gray-700 md:col-span-2">
-            <span className="text-xs text-gray-500">Objectives / notes</span>
+          <label className="flex flex-col gap-1 text-sm text-slate-700 md:col-span-2">
+            <span className="text-xs text-muted">Objectives / notes</span>
             <TextArea
               value={brief.objectives?.notes || "Drive sales uplift while holding 18% margin"}
               onChange={(e) =>
@@ -138,14 +138,14 @@ export default function ScenarioLabScreen() {
 
       <Card>
         <PanelHeader title="Scenario comparison" eyebrow="KPIs & validation" />
-        {scenarios.length === 0 && <p className="text-sm text-gray-500">No scenarios yet. Generate one to compare KPIs.</p>}
+        {scenarios.length === 0 && <p className="text-sm text-muted">No scenarios yet. Generate one to compare KPIs.</p>}
         {scenarios.length > 0 && (
           <Table headers={["Scenario", "Sales", "Margin", "EBIT", "Status", "Select"]}>
             {scenarios.map((row) => (
               <TableRow key={row.scenario.id || row.scenario.label}>
                 <div className="space-y-1">
                   <p className="font-semibold">{row.scenario.label || row.scenario.name || "Scenario"}</p>
-                  <p className="text-xs text-gray-500">{row.scenario.scenario_type}</p>
+                  <p className="text-xs text-muted">{row.scenario.scenario_type}</p>
                 </div>
                 <span>{Math.round(row.kpi?.total_sales || 0).toLocaleString()}</span>
                 <span>{Math.round(row.kpi?.total_margin || 0).toLocaleString()}</span>
@@ -168,14 +168,14 @@ export default function ScenarioLabScreen() {
       </Card>
 
       {focusedScenario && (
-        <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
           <Card>
             <PanelHeader
               title={focusedScenario.scenario.label || focusedScenario.scenario.name || "Scenario details"}
               eyebrow="KPI breakdown"
               action={<Badge tone="info">{focusedScenario.scenario.scenario_type}</Badge>}
             />
-            {breakdownRows.length === 0 && <p className="text-sm text-gray-500">No breakdown data.</p>}
+            {breakdownRows.length === 0 && <p className="text-sm text-muted">No breakdown data.</p>}
             {breakdownRows.length > 0 && (
               <Table headers={["Department", "Sales", "Margin", "Units"]}>
                 {breakdownRows.map((row) => (
@@ -196,10 +196,10 @@ export default function ScenarioLabScreen() {
               <Badge tone={focusedScenario.validation?.status === "PASS" ? "success" : focusedScenario.validation?.status === "WARN" ? "warn" : "muted"}>
                 {focusedScenario.validation?.status || "PENDING"}
               </Badge>
-              <p className="text-sm text-gray-700">Score: {Math.round((focusedScenario.validation?.overall_score || 0) * 100) / 100}</p>
+              <p className="text-sm text-slate-700">Score: {Math.round((focusedScenario.validation?.overall_score || 0) * 100) / 100}</p>
               <div className="space-y-1">
-                <p className="text-xs uppercase tracking-wide text-gray-500">Issues</p>
-                <ul className="list-disc space-y-1 pl-5 text-sm text-gray-700">
+                <p className="text-xs uppercase tracking-wide text-muted">Issues</p>
+                <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
                   {(focusedScenario.validation?.issues || ["No issues found"]).map((issue) => (
                     <li key={issue}>{issue}</li>
                   ))}
@@ -207,8 +207,8 @@ export default function ScenarioLabScreen() {
               </div>
               {focusedScenario.validation?.fixes?.length ? (
                 <div className="space-y-1">
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Suggested fixes</p>
-                  <ul className="list-disc space-y-1 pl-5 text-sm text-gray-700">
+                  <p className="text-xs uppercase tracking-wide text-muted">Suggested fixes</p>
+                  <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
                     {focusedScenario.validation.fixes.map((fix) => (
                       <li key={fix}>{fix}</li>
                     ))}

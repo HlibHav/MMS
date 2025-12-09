@@ -24,17 +24,17 @@ export const discoveryApi = {
 
 // Scenarios API
 export const scenariosApi = {
-  create: (brief: any, parameters?: any) =>
-    apiClient.post(`/api/v1/scenarios/create`, { brief, parameters }),
-  get: (id: string) => apiClient.get(`/api/v1/scenarios/${id}`),
-  update: (id: string, scenario: any) => apiClient.put(`/api/v1/scenarios/${id}`, scenario),
-  remove: (id: string) => apiClient.delete(`/api/v1/scenarios/${id}`),
-  evaluate: (scenario: any) =>
-    apiClient.post(`/api/v1/scenarios/evaluate`, scenario),
-  compare: (scenarios: any[], scenarioIds?: string[]) =>
-    apiClient.post(`/api/v1/scenarios/compare`, { scenarios, scenario_ids: scenarioIds }),
-  validate: (scenario: any, kpi?: any) =>
-    apiClient.post(`/api/v1/scenarios/validate`, { scenario, kpi }),
+  create: async (brief: any, parameters?: any) =>
+    (await apiClient.post(`/api/v1/scenarios/create`, { brief, parameters })).data,
+  get: async (id: string) => (await apiClient.get(`/api/v1/scenarios/${id}`)).data,
+  update: async (id: string, scenario: any) => (await apiClient.put(`/api/v1/scenarios/${id}`, scenario)).data,
+  remove: async (id: string) => (await apiClient.delete(`/api/v1/scenarios/${id}`)).data,
+  evaluate: async (scenario: any) =>
+    (await apiClient.post(`/api/v1/scenarios/evaluate`, scenario)).data,
+  compare: async (scenarios: any[], scenarioIds?: string[]) =>
+    (await apiClient.post(`/api/v1/scenarios/compare`, { scenarios, scenario_ids: scenarioIds })).data,
+  validate: async (scenario: any, kpi?: any) =>
+    (await apiClient.post(`/api/v1/scenarios/validate`, { scenario, kpi })).data,
 }
 
 // Optimization API
@@ -81,13 +81,13 @@ export const dataApi = {
 
 // Chat API
 export const chatApi = {
-  message: (payload: any) => apiClient.post(`/api/v1/chat/message`, payload),
+  message: async (payload: any) => (await apiClient.post(`/api/v1/chat/message`, payload)).data,
   stream: (payload: any) => apiClient.post(`/api/v1/chat/stream`, payload, { responseType: 'text' }),
 }
 
 // Postmortem API
 export const postmortemApi = {
-  analyze: (scenario_id: string, actual_data: Record<string, number>, period: { start: string; end: string }) =>
-    apiClient.post(`/api/v1/postmortem/analyze`, { scenario_id, actual_data, period }),
-  getReport: (scenario_id: string) => apiClient.get(`/api/v1/postmortem/${scenario_id}`),
+  analyze: async (scenario_id: string, actual_data: Record<string, number>, period: { start: string; end: string }) =>
+    (await apiClient.post(`/api/v1/postmortem/analyze`, { scenario_id, actual_data, period })).data,
+  getReport: async (scenario_id: string) => (await apiClient.get(`/api/v1/postmortem/${scenario_id}`)).data,
 }

@@ -86,19 +86,19 @@ export function ChatWidget({ onClose, showHeader = true, footerActions, "aria-la
           }
         />
       )}
-      <div className="flex items-center gap-2 text-xs text-gray-600">
+      <div className="flex items-center gap-2 text-xs text-slate-600">
         <Badge tone="info">Screen: {activeTab}</Badge>
         {selectedOpportunityId && <Badge tone="warn">Opp: {selectedOpportunityId}</Badge>}
         {activeScenarioIds.length > 0 && <Badge tone="muted">{activeScenarioIds.length} scenarios</Badge>}
       </div>
-      <div ref={scrollRef} className="flex min-h-[160px] flex-1 flex-col gap-2 overflow-y-auto rounded-xl bg-gray-50 p-3">
-        {messages.length === 0 && <p className="text-sm text-gray-500">Ask anything about the current screen, scenarios, or gaps.</p>}
+      <div ref={scrollRef} className="flex min-h-[160px] flex-1 flex-col gap-2 overflow-y-auto rounded-xl bg-surface-50 p-3">
+        {messages.length === 0 && <p className="text-sm text-muted">Ask anything about the current screen, scenarios, or gaps.</p>}
         {messages.map((m, idx) => (
-          <div key={idx} className={`rounded-xl px-3 py-2 text-sm ${m.role === "user" ? "bg-primary-50 text-gray-900" : "bg-white shadow-card"}`}>
-            <p className="font-semibold text-xs uppercase tracking-wide text-gray-500">{m.role === "user" ? "You" : "Co-Pilot"}</p>
-            <p className="whitespace-pre-wrap text-gray-900">{m.content}</p>
+          <div key={idx} className={`rounded-xl px-3 py-2 text-sm ${m.role === "user" ? "bg-primary-50 text-slate-900" : "bg-white shadow-card"}`}>
+            <p className="font-semibold text-xs uppercase tracking-wide text-muted">{m.role === "user" ? "You" : "Co-Pilot"}</p>
+            <p className="whitespace-pre-wrap text-slate-900">{m.content}</p>
             {m.suggestions && (
-              <ul className="mt-2 list-disc space-y-1 pl-4 text-gray-700">
+              <ul className="mt-2 list-disc space-y-1 pl-4 text-slate-700">
                 {m.suggestions.map((s) => (
                   <li key={s}>{s}</li>
                 ))}

@@ -25,12 +25,12 @@ export default function PostMortemScreen() {
   }, [report]);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       <Card>
         <PanelHeader title="Post-Mortem Analysis" eyebrow="Completed campaigns" />
         <div className="grid gap-3 md:grid-cols-2">
-          <label className="flex flex-col gap-1 text-sm text-gray-700">
-            <span className="text-xs text-gray-500">Scenario ID</span>
+          <label className="flex flex-col gap-1 text-sm text-slate-700">
+            <span className="text-xs text-muted">Scenario ID</span>
             <Input value={scenarioId} onChange={(e) => setScenarioId(e.target.value)} aria-label="Scenario ID" />
           </label>
         </div>
@@ -42,7 +42,7 @@ export default function PostMortemScreen() {
       </Card>
 
       {report && (
-        <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <PanelHeader title="Forecast vs Actual" eyebrow="Accuracy" />
             {accuracyData.length > 0 ? (
@@ -57,12 +57,12 @@ export default function PostMortemScreen() {
                 </ResponsiveContainer>
               </div>
             ) : (
-              <p className="text-sm text-gray-500">No accuracy data.</p>
+              <p className="text-sm text-muted">No accuracy data.</p>
             )}
           </Card>
           <Card>
             <PanelHeader title="Insights" eyebrow="Learning memo" />
-            <ul className="list-disc space-y-2 pl-4 text-sm text-gray-900">
+            <ul className="list-disc space-y-2 pl-4 text-sm text-slate-900">
               {report.insights.map((ins) => (
                 <li key={ins}>{ins}</li>
               ))}
@@ -73,7 +73,7 @@ export default function PostMortemScreen() {
               ))}
             </div>
             {typeof report.post_promo_dip === "number" && (
-              <p className="mt-3 text-sm text-gray-700">Post-promo dip: {report.post_promo_dip}%</p>
+              <p className="mt-3 text-sm text-slate-700">Post-promo dip: {report.post_promo_dip}%</p>
             )}
           </Card>
         </div>

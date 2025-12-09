@@ -76,6 +76,17 @@ export interface PostMortemReport {
   learning_points?: string[]
 }
 
+// Chat
+export interface ChatMessageRequest {
+  message: string
+  context?: Record<string, any>
+}
+
+export interface ChatMessageResponse {
+  response: string
+  suggestions?: string[]
+}
+
 export interface AnalyzeRequest {
   month: string
   geo: string
