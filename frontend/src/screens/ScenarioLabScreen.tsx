@@ -58,9 +58,10 @@ export default function ScenarioLabScreen() {
         objectives: { notes: values.objectives_notes },
         constraints: { max_discount: values.max_discount / 100, min_margin: values.min_margin / 100 },
       };
-      const sc = await createScenarioFromBrief(brief, values.scenario_type);
-      const kpi = await evaluateScenario(sc);
-      const validation = await validateScenario(sc);
+      const created = await createScenarioFromBrief(brief, values.scenario_type);
+      const sc: PromoScenario = created?.scenario ?? (created as any);
+      const kpi = created?.kpi ?? (sc ? await evaluateScenario(sc) : undefined);
+      const validation = created?.validation ?? (sc ? await validateScenario(sc) : undefined);
       return { sc, kpi, validation, values };
     },
     onSuccess: ({ sc, kpi, validation, values }) => {

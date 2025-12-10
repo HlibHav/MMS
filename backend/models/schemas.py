@@ -8,7 +8,7 @@ This module defines all the data structures used throughout the application.
 
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import date, datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, Extra
 
 
 # Core Domain Models
@@ -19,17 +19,31 @@ class DateRange(BaseModel):
     end_date: date
 
 
+class PromoMechanic(BaseModel):
+    department: str
+    channel: str
+    discount_pct: float
+    segments: List[str] = ["ALL"]
+    notes: Optional[str] = None
+    product_focus: Optional[List[str]] = None
+
+
 class PromoScenario(BaseModel):
-    """Promotional scenario configuration."""
+    """Promotional scenario configuration (docs-aligned, backward compatible)."""
     id: Optional[str] = None
-    name: str
+    name: Optional[str] = None
+    label: Optional[str] = None
     description: Optional[str] = None
     date_range: DateRange
-    departments: List[str]
-    channels: List[str]  # online, offline
-    discount_percentage: float
+    departments: Optional[List[str]] = None
+    channels: Optional[List[str]] = None  # online, offline
+    discount_percentage: Optional[float] = None
+    mechanics: Optional[List[PromoMechanic]] = None
     segments: Optional[List[str]] = None
     metadata: Optional[Dict[str, Any]] = None
+
+    class Config:
+        extra = Extra.allow
 
 
 class PromoContext(BaseModel):
@@ -45,12 +59,15 @@ class PromoContext(BaseModel):
 class PromoOpportunity(BaseModel):
     """Identified promotional opportunity."""
     id: str
-    department: str
-    channel: str
-    date_range: DateRange
-    estimated_potential: float
-    priority: int
-    rationale: str
+    title: Optional[str] = None
+    promo_date_range: Optional[Dict[str, str]] = None
+    date_range: Optional[DateRange] = None
+    department: Optional[str] = None
+    focus_departments: Optional[List[str]] = None
+    channel: Optional[str] = None
+    estimated_potential: Optional[Dict[str, float]] = None
+    priority: Optional[str] = None
+    rationale: Optional[str] = None
 
 
 class BaselineForecast(BaseModel):
@@ -70,26 +87,53 @@ class UpliftModel(BaseModel):
     last_updated: datetime
 
 
+class KPIBreakdown(BaseModel):
+    channel: Optional[str] = None
+    department: Optional[str] = None
+    sales_value: Optional[float] = None
+    margin_pct: Optional[float] = None
+    units: Optional[float] = None
+    margin_value: Optional[float] = None
+
+
 class ScenarioKPI(BaseModel):
-    """KPI results for a scenario."""
-    scenario_id: str
-    total_sales: float
-    total_margin: float
-    total_ebit: float
-    total_units: float
-    breakdown_by_channel: Dict[str, Dict[str, float]]
-    breakdown_by_department: Dict[str, Dict[str, float]]
+    """KPI results for a scenario (docs)."""
+    scenario_id: Optional[str] = None
+    period: Optional[str] = None
+    total: Optional[Dict[str, float]] = None
+    vs_baseline: Optional[Dict[str, float]] = None
+    by_channel: Optional[List[KPIBreakdown]] = None
+    by_department: Optional[List[KPIBreakdown]] = None
+    by_segment: Optional[List[KPIBreakdown]] = None
+    # backward compat fields
+    total_sales: Optional[float] = None
+    total_margin: Optional[float] = None
+    total_ebit: Optional[float] = None
+    total_units: Optional[float] = None
+    breakdown_by_channel: Optional[Dict[str, Dict[str, float]]] = None
+    breakdown_by_department: Optional[Dict[str, Dict[str, float]]] = None
     breakdown_by_segment: Optional[Dict[str, Dict[str, float]]] = None
-    comparison_vs_baseline: Dict[str, float]
+    comparison_vs_baseline: Optional[Dict[str, float]] = None
+
+
+class ValidationIssue(BaseModel):
+    type: Optional[str] = None
+    severity: Optional[str] = None
+    message: Optional[str] = None
+    suggested_fix: Optional[str] = None
+    affected_department: Optional[str] = None
 
 
 class ValidationReport(BaseModel):
     """Scenario validation report."""
-    scenario_id: str
-    is_valid: bool
-    issues: List[str]
-    fixes: List[str]
-    checks_passed: Dict[str, bool]
+    scenario_id: Optional[str] = None
+    status: Optional[str] = None  # PASS | WARN | BLOCK
+    issues: Optional[List[ValidationIssue]] = None
+    overall_score: Optional[float] = None
+    # backward compat
+    is_valid: Optional[bool] = None
+    fixes: Optional[List[str]] = None
+    checks_passed: Optional[Dict[str, bool]] = None
 
 
 class CreativeBrief(BaseModel):
@@ -119,13 +163,19 @@ class CampaignPlan(BaseModel):
 
 
 class PostMortemReport(BaseModel):
-    """Post-mortem analysis report."""
+    """Post-mortem analysis report (docs)."""
     scenario_id: str
-    forecast_accuracy: Dict[str, float]
-    uplift_analysis: Dict[str, Any]
-    post_promo_dip: Optional[float] = None
-    cannibalization_signals: Optional[List[str]] = None
-    insights: List[str]
+    period: Optional[str] = None
+    forecast_kpi: Optional[Any] = None
+    actual_kpi: Optional[Any] = None
+    vs_forecast: Optional[Dict[str, float]] = None
+    post_promo_dip: Optional[Dict[str, Any]] = None
+    cannibalization_signals: Optional[List[Dict[str, Any]]] = None
+    insights: Optional[List[str]] = None
+    learning_points: Optional[List[str]] = None
+    # backward compat
+    forecast_accuracy: Optional[Dict[str, float]] = None
+    uplift_analysis: Optional[Dict[str, Any]] = None
 
 
 class Insights(BaseModel):

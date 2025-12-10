@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from typing import List, Optional
 from datetime import date
 from calendar import monthrange
+import pandas as pd
 
 from models.schemas import PromoOpportunity, PromoContext, GapAnalysis, DateRange
 from engines.forecast_baseline_engine import ForecastBaselineEngine
@@ -61,6 +62,70 @@ def _serialize_context(context: PromoContext) -> dict:
     return payload
 
 
+@router.post("/analyze")
+async def analyze_situation(payload: dict) -> dict:
+    """
+    Docs-aligned discovery analysis.
+
+    Returns baseline forecast, gap analysis, and opportunities.
+    """
+    month = payload.get("month")
+    geo = payload.get("geo")
+    if not month or not geo:
+        raise HTTPException(status_code=400, detail="month and geo are required")
+
+    start_date, end_date = _month_to_range(month)
+    try:
+        baseline = baseline_engine.calculate_baseline((start_date, end_date))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    targets = payload.get("targets") or targets_tool.get_targets(month).model_dump()
+    gap_vs_target = baseline_engine.calculate_gap_vs_targets(baseline=baseline, targets=targets)
+
+    # Opportunities (reuse sales aggregation)
+    agg = sales_tool.get_aggregated_sales(
+        date_range=(start_date, end_date),
+        grain=["department"],
+        filters={"channel": None},
+    )
+    opportunities: list[dict] = []
+    if not agg.empty:
+        agg = agg.sort_values(by="sales_value", ascending=False).reset_index(drop=True)
+        for idx, row in agg.iterrows():
+            opportunities.append(
+                {
+                    "id": f"opp_{idx+1:02d}",
+                    "title": f"Opportunity {idx+1}",
+                    "promo_date_range": {
+                        "start": start_date.isoformat(),
+                        "end": end_date.isoformat(),
+                    },
+                    "focus_departments": [row["department"]],
+                    "estimated_potential": {
+                        "sales_value": float(row["sales_value"] * 0.12),
+                        "margin_impact": -0.3,
+                    },
+                    "priority": "high" if idx == 0 else "medium",
+                }
+            )
+
+    margin_pct = (baseline.total_margin / baseline.total_sales * 100) if baseline.total_sales else 0.0
+    return {
+        "baseline_forecast": {
+            "period": {"start": start_date.isoformat(), "end": end_date.isoformat()},
+            "totals": {
+                "sales_value": baseline.total_sales,
+                "margin_value": baseline.total_margin,
+                "margin_pct": margin_pct,
+                "units": baseline.total_units,
+            },
+        },
+        "gap_analysis": gap_vs_target,
+        "opportunities": opportunities,
+    }
+
+
 @router.get("/opportunities")
 async def get_opportunities(
     month: str,
@@ -91,20 +156,27 @@ async def get_opportunities(
     )
     opportunities: List[PromoOpportunity] = []
     for idx, row in agg.iterrows():
-        estimated_potential = float(row["sales_value"] * 0.12)
+        estimated_potential = {
+            "sales_value": float(row["sales_value"] * 0.12),
+            "margin_impact": -0.3,
+        }
         opportunities.append(
             PromoOpportunity(
                 id=f"opp_{idx+1:02d}",
-                department=row["department"],
+                title=f"Opportunity {idx+1}",
+                focus_departments=[row["department"]],
                 channel="mixed",
-                date_range=DateRange(start_date=start_date, end_date=end_date),
+                promo_date_range={"start": start_date.isoformat(), "end": end_date.isoformat()},
                 estimated_potential=estimated_potential,
-                priority=len(agg) - idx,
+                priority="high" if idx == 0 else "medium",
                 rationale=f"12% upside based on {row['department']} run-rate and recent demand",
             )
         )
 
-    opportunities.sort(key=lambda o: o.estimated_potential, reverse=True)
+    opportunities.sort(
+        key=lambda o: (o.estimated_potential or {}).get("sales_value", 0),
+        reverse=True,
+    )
     return opportunities
 
 
@@ -253,3 +325,26 @@ async def get_gaps(
         units_gap=gaps["units_gap"],
         gap_percentage=gap_percentage,
     )
+
+
+@router.get("/months")
+async def get_available_months() -> List[str]:
+    """
+    Return available months (YYYY-MM) based on the sales dataset.
+
+    This inspects the loaded sales data to avoid hard-coding month options on the frontend.
+    """
+    try:
+        df = sales_tool._load_dataframe()  # noqa: SLF001 - internal helper is acceptable for read-only access
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to load sales data: {exc}") from exc
+
+    if "date" not in df.columns:
+        raise HTTPException(status_code=500, detail="Sales data is missing 'date' column")
+
+    dates = pd.to_datetime(df["date"], errors="coerce").dropna()
+    if dates.empty:
+        raise HTTPException(status_code=404, detail="No dates available in sales data")
+
+    months = sorted({d.strftime("%Y-%m") for d in dates}, reverse=True)
+    return months

@@ -4,7 +4,7 @@ Scenario Lab API Routes
 Endpoints for scenario creation, evaluation, and comparison.
 """
 
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import List, Optional, Dict, Any
 import uuid
 from pydantic import BaseModel
@@ -20,6 +20,9 @@ from tools.targets_config_tool import TargetsConfigTool
 from tools.context_data_tool import ContextDataTool
 from agents.scenario_lab_agent import ScenarioLabAgent
 from agents.validation_agent import ValidationAgent
+from db.session import get_session
+from db import models as db_models
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
@@ -40,10 +43,6 @@ scenario_agent = ScenarioLabAgent(
     context_engine=context_engine,
 )
 validation_agent = ValidationAgent(validation_engine=validation_engine, config_tool=targets_tool)
-
-# In-memory scenario store (for demo; replace with DB in production)
-SCENARIO_STORE: Dict[str, PromoScenario] = {}
-
 
 class PromoDateRange(BaseModel):
     start: str
@@ -141,18 +140,79 @@ def _serialize_scenario(scenario: PromoScenario, label: Optional[str] = None) ->
     }
 
 
+def _persist_scenario(db: Session, scenario: PromoScenario, scenario_type: str) -> db_models.PromoScenario:
+    mechanics = [
+        {
+            "department": dept,
+            "channel": ch,
+            "discount_pct": scenario.discount_percentage,
+            "segments": scenario.segments or ["ALL"],
+        }
+        for dept in scenario.departments
+        for ch in scenario.channels
+    ]
+    row = db_models.PromoScenario(
+        id=scenario.id,
+        label=scenario.name,
+        source_opportunity_id=None,
+        date_range_start=scenario.date_range.start_date,
+        date_range_end=scenario.date_range.end_date,
+        scenario_type=scenario_type,
+        mechanics=mechanics,
+    )
+    db.add(row)
+    return row
+
+
+def _persist_kpi(db: Session, scenario_id: str, kpi: ScenarioKPI) -> db_models.ScenarioKPI:
+    row = db_models.ScenarioKPI(
+        scenario_id=scenario_id,
+        period_start=kpi.breakdown_by_channel.get("period_start") if isinstance(kpi.breakdown_by_channel, dict) else scenario_agent.forecast_engine.targets_tool and None,  # type: ignore[arg-type]
+        period_end=kpi.breakdown_by_channel.get("period_end") if isinstance(kpi.breakdown_by_channel, dict) else None,  # type: ignore[arg-type]
+        total_sales_value=kpi.total_sales,
+        total_margin_value=kpi.total_margin,
+        total_margin_pct=(kpi.total_margin / kpi.total_sales * 100) if kpi.total_sales else 0,
+        total_ebit=kpi.total_ebit,
+        total_units=kpi.total_units,
+        sales_value_delta=kpi.comparison_vs_baseline.get("sales_delta", 0) if kpi.comparison_vs_baseline else 0,
+        margin_value_delta=kpi.comparison_vs_baseline.get("margin_delta", 0) if kpi.comparison_vs_baseline else 0,
+        ebit_delta=kpi.comparison_vs_baseline.get("ebit_delta", 0) if kpi.comparison_vs_baseline else 0,
+        units_delta=kpi.comparison_vs_baseline.get("units_delta", 0) if kpi.comparison_vs_baseline else 0,
+        kpi_breakdown={
+            "by_channel": kpi.breakdown_by_channel,
+            "by_department": kpi.breakdown_by_department,
+            "by_segment": kpi.breakdown_by_segment,
+        },
+    )
+    db.add(row)
+    return row
+
+
+def _persist_validation(db: Session, scenario_id: str, validation: ValidationReport) -> db_models.ValidationReport:
+    row = db_models.ValidationReport(
+        scenario_id=scenario_id,
+        status=getattr(validation, "status", None) or ("PASS" if getattr(validation, "is_valid", False) else "WARN"),
+        issues=getattr(validation, "issues", []),
+        overall_score=getattr(validation, "overall_score", None),
+    )
+    db.add(row)
+    return row
+
+
 @router.post("/create")
-async def create_scenario(payload: CreateScenarioRequest) -> Dict[str, Any]:
+async def create_scenario(payload: CreateScenarioRequest, db: Session = Depends(get_session)) -> Dict[str, Any]:
     """
     Create a promotional scenario from brief (docs-compliant response shape).
     """
     scenario = _build_default_scenario(payload.brief, payload.parameters, payload.scenario_type)
-    SCENARIO_STORE[scenario.id] = scenario
-
-    # Evaluate immediately for demo determinism
     geo = payload.brief.objectives.get("geo", "DE") if payload.brief.objectives else "DE"
     kpi = scenario_agent.evaluate_scenario(scenario, geo=geo)
     validation = scenario_agent.validate_scenario(scenario, kpi)
+
+    row = _persist_scenario(db, scenario, payload.scenario_type)
+    _persist_kpi(db, scenario.id or row.id, kpi)
+    _persist_validation(db, scenario.id or row.id, validation)
+    db.commit()
 
     return {
         "scenario": _serialize_scenario(scenario, label=payload.scenario_type.title()),
@@ -162,47 +222,110 @@ async def create_scenario(payload: CreateScenarioRequest) -> Dict[str, Any]:
 
 
 @router.get("/{scenario_id}")
-async def get_scenario(scenario_id: str) -> Dict[str, Any]:
+async def get_scenario(scenario_id: str, db: Session = Depends(get_session)) -> Dict[str, Any]:
     """Get scenario details with KPIs and validation."""
-    scenario = SCENARIO_STORE.get(scenario_id)
-    if not scenario:
+    row: db_models.PromoScenario | None = db.get(db_models.PromoScenario, scenario_id)
+    if not row:
         raise HTTPException(status_code=404, detail="Scenario not found")
-    kpi = scenario_agent.evaluate_scenario(scenario, geo="DE")
-    validation = scenario_agent.validate_scenario(scenario, kpi, geo="DE")
-    return {"scenario": _serialize_scenario(scenario), "kpi": kpi, "validation": validation}
+    scenario = PromoScenario(
+        id=row.id,
+        name=row.label,
+        description=row.scenario_type,
+        date_range=DateRange(start_date=row.date_range_start, end_date=row.date_range_end),
+        departments=[m.get("department") for m in row.mechanics],
+        channels=list({m.get("channel") for m in row.mechanics}),
+        discount_percentage=row.mechanics[0].get("discount_pct") if row.mechanics else 0,
+    )
+    kpi_row = db.query(db_models.ScenarioKPI).filter(db_models.ScenarioKPI.scenario_id == row.id).order_by(db_models.ScenarioKPI.created_at.desc()).first()
+    validation_row = db.query(db_models.ValidationReport).filter(db_models.ValidationReport.scenario_id == row.id).first()
+    kpi_payload = None
+    validation_payload = None
+    if kpi_row:
+        kpi_payload = ScenarioKPI(
+            scenario_id=row.id,
+            total_sales=float(kpi_row.total_sales_value),
+            total_margin=float(kpi_row.total_margin_value),
+            total_ebit=float(kpi_row.total_ebit),
+            total_units=float(kpi_row.total_units),
+            breakdown_by_channel=kpi_row.kpi_breakdown.get("by_channel", {}),
+            breakdown_by_department=kpi_row.kpi_breakdown.get("by_department", {}),
+            breakdown_by_segment=kpi_row.kpi_breakdown.get("by_segment", {}),
+            comparison_vs_baseline={
+                "sales_delta": float(kpi_row.sales_value_delta),
+                "margin_delta": float(kpi_row.margin_value_delta),
+                "ebit_delta": float(kpi_row.ebit_delta),
+                "units_delta": float(kpi_row.units_delta),
+            },
+        )
+    if validation_row:
+        validation_payload = ValidationReport(
+            scenario_id=row.id,
+            is_valid=validation_row.status == "PASS",
+            issues=validation_row.issues or [],
+            fixes=[],
+            checks_passed={},
+        )
+    return {"scenario": _serialize_scenario(scenario), "kpi": kpi_payload, "validation": validation_payload}
 
 
 @router.put("/{scenario_id}")
-async def update_scenario(scenario_id: str, updated: UpdateScenarioRequest) -> Dict[str, Any]:
+async def update_scenario(scenario_id: str, updated: UpdateScenarioRequest, db: Session = Depends(get_session)) -> Dict[str, Any]:
     """Update scenario parameters then re-evaluate."""
-    if scenario_id not in SCENARIO_STORE:
+    row: db_models.PromoScenario | None = db.get(db_models.PromoScenario, scenario_id)
+    if not row:
         raise HTTPException(status_code=404, detail="Scenario not found")
-    existing = SCENARIO_STORE[scenario_id]
-    existing.departments = updated.departments or existing.departments
-    existing.channels = updated.channels or existing.channels
-    if updated.discount_pct is not None:
-        existing.discount_percentage = updated.discount_pct
-    if updated.segments is not None:
-        existing.segments = updated.segments
-    SCENARIO_STORE[scenario_id] = existing
 
-    kpi = scenario_agent.evaluate_scenario(existing, geo="DE")
-    validation = scenario_agent.validate_scenario(existing, kpi, geo="DE")
-    return {"scenario": _serialize_scenario(existing), "kpi": kpi, "validation": validation}
+    mechanics = row.mechanics or []
+    if updated.departments or updated.channels or updated.discount_pct is not None or updated.segments is not None:
+        depts = updated.departments or [m.get("department") for m in mechanics] or []
+        chans = updated.channels or [m.get("channel") for m in mechanics] or []
+        discount = updated.discount_pct if updated.discount_pct is not None else (mechanics[0].get("discount_pct") if mechanics else 0)
+        segs = updated.segments or (mechanics[0].get("segments") if mechanics else [])
+        mechanics = [
+            {"department": d, "channel": c, "discount_pct": discount, "segments": segs or ["ALL"]}
+            for d in depts
+            for c in chans
+        ]
+        row.mechanics = mechanics
+    db.add(row)
+
+    scenario = PromoScenario(
+        id=row.id,
+        name=row.label,
+        description=row.scenario_type,
+        date_range=DateRange(start_date=row.date_range_start, end_date=row.date_range_end),
+        departments=[m.get("department") for m in mechanics],
+        channels=list({m.get("channel") for m in mechanics}),
+        discount_percentage=mechanics[0].get("discount_pct") if mechanics else 0,
+        segments=mechanics[0].get("segments") if mechanics else [],
+    )
+    kpi = scenario_agent.evaluate_scenario(scenario, geo="DE")
+    validation = scenario_agent.validate_scenario(scenario, kpi, geo="DE")
+
+    _persist_kpi(db, row.id, kpi)
+    _persist_validation(db, row.id, validation)
+    db.commit()
+
+    return {"scenario": _serialize_scenario(scenario), "kpi": kpi, "validation": validation}
 
 
 @router.delete("/{scenario_id}")
-async def delete_scenario(scenario_id: str) -> dict:
+async def delete_scenario(scenario_id: str, db: Session = Depends(get_session)) -> dict:
     """Delete scenario."""
-    if scenario_id not in SCENARIO_STORE:
+    row: db_models.PromoScenario | None = db.get(db_models.PromoScenario, scenario_id)
+    if not row:
         raise HTTPException(status_code=404, detail="Scenario not found")
-    del SCENARIO_STORE[scenario_id]
+    db.query(db_models.ScenarioKPI).filter(db_models.ScenarioKPI.scenario_id == scenario_id).delete()
+    db.query(db_models.ValidationReport).filter(db_models.ValidationReport.scenario_id == scenario_id).delete()
+    db.delete(row)
+    db.commit()
     return {"deleted": True, "scenario_id": scenario_id}
 
 
 @router.post("/evaluate")
 async def evaluate_scenario(
-    scenario: PromoScenario
+    scenario: PromoScenario,
+    db: Session = Depends(get_session)
 ) -> Dict[str, Any]:
     """
     Evaluate scenario and calculate KPIs.
@@ -216,6 +339,9 @@ async def evaluate_scenario(
     try:
         kpi = scenario_agent.evaluate_scenario(scenario, geo="DE")
         validation = scenario_agent.validate_scenario(scenario, kpi, geo="DE")
+        _persist_kpi(db, scenario.id or str(uuid.uuid4()), kpi)
+        _persist_validation(db, scenario.id or str(uuid.uuid4()), validation)
+        db.commit()
         return {"kpi": kpi, "validation": validation}
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Error evaluating scenario: {str(exc)}") from exc
@@ -223,20 +349,31 @@ async def evaluate_scenario(
 
 @router.post("/{scenario_id}/evaluate")
 async def evaluate_scenario_by_id(
-    scenario_id: str
+    scenario_id: str,
+    db: Session = Depends(get_session)
 ) -> Dict[str, Any]:
     """
     Docs-friendly: re-evaluate an existing scenario by id and return KPIs + validation.
     """
-    scenario = SCENARIO_STORE.get(scenario_id)
-    if not scenario:
+    row: db_models.PromoScenario | None = db.get(db_models.PromoScenario, scenario_id)
+    if not row:
         raise HTTPException(status_code=404, detail="Scenario not found")
-    return await evaluate_scenario(scenario)
+    scenario = PromoScenario(
+        id=row.id,
+        name=row.label,
+        description=row.scenario_type,
+        date_range=DateRange(start_date=row.date_range_start, end_date=row.date_range_end),
+        departments=[m.get("department") for m in row.mechanics],
+        channels=list({m.get("channel") for m in row.mechanics}),
+        discount_percentage=row.mechanics[0].get("discount_pct") if row.mechanics else 0,
+    )
+    return await evaluate_scenario(scenario, db)
 
 
 @router.post("/compare")
 async def compare_scenarios(
-    payload: Any = Body(...)
+    payload: Any = Body(...),
+    db: Session = Depends(get_session)
 ) -> Dict[str, Any]:
     """
     Compare multiple scenarios side-by-side.
@@ -259,9 +396,20 @@ async def compare_scenarios(
 
     if not scenarios and scenario_ids:
         for sid in scenario_ids:
-            stored = SCENARIO_STORE.get(sid)
-            if stored:
-                scenarios.append(stored)
+            row = db.get(db_models.PromoScenario, sid)
+            if row:
+                scenarios.append(
+                    PromoScenario(
+                        id=row.id,
+                        name=row.label,
+                        description=row.scenario_type,
+                        date_range=DateRange(start_date=row.date_range_start, end_date=row.date_range_end),
+                        departments=[m.get("department") for m in row.mechanics],
+                        channels=list({m.get("channel") for m in row.mechanics}),
+                        discount_percentage=row.mechanics[0].get("discount_pct") if row.mechanics else 0,
+                        segments=row.mechanics[0].get("segments") if row.mechanics else [],
+                    )
+                )
     if not scenarios:
         raise HTTPException(status_code=400, detail="At least one scenario is required")
 

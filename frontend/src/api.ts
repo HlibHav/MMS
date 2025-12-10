@@ -2,12 +2,15 @@ import axios from "axios";
 
 export interface PromoOpportunity {
   id: string;
-  department: string;
-  channel: string;
-  estimated_potential: number;
-  priority: number;
-  rationale: string;
-  date_range: { start_date: string; end_date: string };
+  title?: string;
+  promo_date_range?: { start: string; end: string };
+  date_range?: { start_date: string; end_date: string } | null;
+  department?: string;
+  focus_departments?: string[];
+  channel?: string;
+  estimated_potential?: { sales_value?: number; margin_impact?: number } | number;
+  priority?: string | number;
+  rationale?: string;
 }
 
 export interface PromoContext {
@@ -136,6 +139,11 @@ export const fetchBaseline = async (start: string, end: string) => {
   return res.data;
 };
 
+export const fetchDiscoveryMonths = async (): Promise<string[]> => {
+  const res = await client.get("/discovery/months");
+  return res.data;
+};
+
 export const fetchDiscoveryDashboard = async (month: string, geo: string): Promise<DiscoveryDashboard> => {
   const res = await client.get("/discovery/dashboard", { params: { month, geo } });
   return res.data;
@@ -172,8 +180,8 @@ export const sendChatMessage = async (message: string, context?: ChatContext) =>
 };
 
 export const createScenarioFromBrief = async (brief: PromoBrief, scenario_type = "balanced", parameters?: Record<string, any>) => {
-  const res = await client.post("/scenarios", { brief, scenario_type, parameters });
-  return res.data as PromoScenario;
+  const res = await client.post("/scenarios/create", { brief, scenario_type, parameters });
+  return res.data as { scenario: PromoScenario; kpi?: any; validation?: any };
 };
 
 export const evaluateScenario = async (scenario: PromoScenario) => {

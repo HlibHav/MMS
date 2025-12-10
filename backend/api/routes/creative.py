@@ -4,7 +4,7 @@ Creative API Routes
 Endpoints for creative brief and asset generation.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional, Dict, Any
 from datetime import date, timedelta
 
@@ -14,7 +14,9 @@ from tools.targets_config_tool import TargetsConfigTool
 from tools.cdp_tool import CDPTool
 from agents.creative_agent import CreativeAgent
 from engines.validation_engine import ValidationEngine
-from .scenarios import SCENARIO_STORE
+from db.session import get_session
+from db import models as db_models
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
@@ -28,7 +30,8 @@ BRIEF_STORE: Dict[str, Dict[str, Any]] = {}
 
 @router.post("/finalize")
 async def finalize_campaign(
-    scenarios: List[PromoScenario]
+    scenarios: List[PromoScenario],
+    db: Session = Depends(get_session)
 ) -> CampaignPlan:
     """
     Finalize selected scenarios into campaign plan.
@@ -51,7 +54,8 @@ async def finalize_campaign(
 @router.post("/brief")
 async def generate_brief(
     scenario: PromoScenario,
-    segments: Optional[List[str]] = None
+    segments: Optional[List[str]] = None,
+    db: Session = Depends(get_session)
 ) -> CreativeBrief:
     """
     Generate creative brief from scenario.
@@ -73,7 +77,8 @@ async def generate_brief(
 
 @router.post("/assets")
 async def generate_assets(
-    brief: CreativeBrief
+    brief: CreativeBrief,
+    db: Session = Depends(get_session)
 ) -> List[AssetSpec]:
     """
     Generate asset specifications from creative brief.
@@ -91,7 +96,7 @@ async def generate_assets(
 
 
 @router.post("/generate")
-async def generate_creative_package(payload: dict) -> dict:
+async def generate_creative_package(payload: dict, db: Session = Depends(get_session)) -> dict:
     """
     Docs-friendly endpoint: generate creative brief and assets for scenarios.
     """
@@ -101,11 +106,19 @@ async def generate_creative_package(payload: dict) -> dict:
 
     briefs = []
     for scenario_id in scenario_ids or ["demo_scenario"]:
-        scenario = SCENARIO_STORE.get(scenario_id) if "SCENARIO_STORE" in globals() else None  # type: ignore[name-defined]
-        if not scenario:
-            from datetime import date, timedelta
+        scenario_row = db.get(db_models.PromoScenario, scenario_id)
+        if scenario_row:
+            scenario = PromoScenario(
+                id=scenario_row.id,
+                name=scenario_row.label,
+                description=scenario_row.scenario_type,
+                date_range=scenario_row.date_range_start and scenario_row.date_range_end and None,  # unused for creative
+                departments=[m.get("department") for m in scenario_row.mechanics],
+                channels=list({m.get("channel") for m in scenario_row.mechanics}),
+                discount_percentage=scenario_row.mechanics[0].get("discount_pct") if scenario_row.mechanics else 0,
+            )
+        else:
             from models.schemas import DateRange
-
             today = date.today()
             scenario = PromoScenario(
                 id=scenario_id,
@@ -120,15 +133,15 @@ async def generate_creative_package(payload: dict) -> dict:
         assets = creative_agent.generate_assets(brief)
         filtered_assets = [a for a in assets if a.asset_type in asset_types] or assets
         brief_id = scenario_id or f"brief_{len(BRIEF_STORE)+1}"
-        payload = {"brief_id": brief_id, "scenario_id": scenario_id, "creative_brief": brief, "assets": filtered_assets}
-        BRIEF_STORE[brief_id] = payload
-        briefs.append(payload)
+        record = {"brief_id": brief_id, "scenario_id": scenario_id, "creative_brief": brief, "assets": filtered_assets}
+        BRIEF_STORE[brief_id] = record
+        briefs.append(record)
 
     return {"briefs": briefs}
 
 
 @router.get("/{brief_id}")
-async def get_creative_brief(brief_id: str) -> dict:
+async def get_creative_brief(brief_id: str, db: Session = Depends(get_session)) -> dict:
     """
     Return stored or demo creative brief by id (docs-aligned).
     """

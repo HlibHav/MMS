@@ -17,21 +17,21 @@ export default function Layout({ children }: LayoutProps) {
   ]
   
   return (
-    <div className="min-h-screen bg-surface-50 text-slate-900">
-      <nav className="border-b border-border bg-white shadow-card">
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <nav className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center gap-4">
-              <h1 className="text-xl font-semibold">Promo Scenario Co-Pilot</h1>
-              <div className="hidden sm:flex sm:space-x-6">
+              <h1 className="text-xl font-semibold text-slate-50">Promo Scenario Co-Pilot</h1>
+              <div className="hidden sm:flex sm:space-x-2">
                 {navItems.map((item) => (
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`inline-flex items-center rounded-md px-3 py-2 text-sm font-medium transition ${
+                    className={`inline-flex items-center rounded-lg px-3 py-2 text-sm font-medium transition ${
                       location.pathname === item.path
-                        ? "bg-primary-50 text-primary-700"
-                        : "text-muted hover:bg-surface-100 hover:text-slate-900"
+                        ? "bg-primary-500/10 text-primary-200"
+                        : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
                     }`}
                   >
                     {item.label}

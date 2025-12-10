@@ -19,7 +19,8 @@ import pandas as pd
 from backend.tools.db_loader import DatabaseLoaderTool
 
 
-DEFAULT_INPUT = Path("/Users/Glebazzz/MMS/Data/merged_cleaned_sales_clean.parquet")
+# Default to processed parquet provided in the workspace
+DEFAULT_INPUT = Path("/Users/Glebazzz/MMS_clean/tmp/processed/sales_with_promo.parquet")
 DEFAULT_DB_URL = "duckdb:///tmp/mms_data.duckdb"
 TARGET_TABLE = "sales_aggregated"
 
@@ -51,21 +52,34 @@ def _normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     if "discount_pct" not in df.columns:
         df["discount_pct"] = 0.0
 
-    # Promo flag from explicit column or code_promo
+    # Promo flag from promo columns
     if "promo_flag" not in df.columns:
-        if "code_promo" in df.columns:
-            df["promo_flag"] = df["code_promo"].notna() & (df["code_promo"] != "")
+        promo_cols = []
+        for col in ["code_promo", "type_of_promo", "desc_promo", "date_start_promo"]:
+            if col in df.columns:
+                promo_cols.append(df[col])
+        if promo_cols:
+            promo_indicator = False
+            for col in promo_cols:
+                promo_indicator = promo_indicator | col.notna()
+            df["promo_flag"] = promo_indicator
         else:
             df["promo_flag"] = False
 
     # Normalize types
     df["date"] = pd.to_datetime(df["date"])
-    df["channel"] = df["channel"].astype(str).str.lower()
+    df["channel"] = (
+        df["channel"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+        .replace({"stores": "offline", "store": "offline", "web": "online"})
+    )
     df["department"] = df["department"].astype(str).str.upper()
     df["promo_flag"] = df["promo_flag"].astype(bool)
 
-    # Keep only expected columns
-    columns = [
+    # Keep only expected columns, then aggregate to the documented grain
+    columns = {
         "date",
         "channel",
         "department",
@@ -74,9 +88,21 @@ def _normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         "sales_value",
         "margin_value",
         "units",
-    ]
+    }
     df = df[[col for col in columns if col in df.columns]]
-    return df
+
+    grouped = (
+        df.groupby(["date", "channel", "department", "promo_flag"], as_index=False)
+        .agg(
+            {
+                "sales_value": "sum",
+                "margin_value": "sum",
+                "units": "sum",
+                "discount_pct": "mean",
+            }
+        )
+    )
+    return grouped
 
 
 def load_custom_sales(

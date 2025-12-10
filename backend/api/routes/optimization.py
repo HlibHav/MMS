@@ -22,6 +22,9 @@ from tools.targets_config_tool import TargetsConfigTool
 from tools.context_data_tool import ContextDataTool
 from agents.optimization_agent import OptimizationAgent
 from agents.scenario_lab_agent import ScenarioLabAgent
+from db.session import get_session
+from db import models as db_models
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
@@ -58,28 +61,53 @@ optimization_agent = OptimizationAgent(
 async def optimize_scenarios(
     payload: Dict[str, Any] = Body(...),
     request: Request = None,
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_session),
 ) -> Dict[str, Any]:
     """
     Generate optimized scenarios (docs-compliant response shape).
     """
     try:
-        brief = payload.get("brief", "")
-        objectives = payload.get("objectives") or payload.get("constraints", {}).get("objectives") or {"sales": 0.6, "margin": 0.4}
+        brief = payload.get("brief", {})
         constraints = payload.get("constraints") or {}
-        num_scenarios = int(payload.get("num_scenarios", 3))
+        num_scenarios = max(int(payload.get("num_scenarios", 3)), 1)
 
-        optimized = optimization_agent.optimize_scenarios(brief, constraints)[: max(num_scenarios, 1)]
+        optimized = optimization_agent.optimize_scenarios(brief, constraints)[: num_scenarios]
 
         results = []
         for rank, scenario in enumerate(optimized, start=1):
             kpi = scenario_agent.evaluate_scenario(scenario, geo="DE")
+            validation = scenario_agent.validate_scenario(scenario, kpi, geo="DE")
+
+            # Optionally persist generated scenario
+            row = db_models.PromoScenario(
+                id=scenario.id,
+                label=scenario.name,
+                date_range_start=scenario.date_range.start_date,
+                date_range_end=scenario.date_range.end_date,
+                scenario_type=payload.get("objectives", {}).get("maximize") if payload.get("objectives") else "balanced",
+                mechanics=[
+                    {
+                        "department": dept,
+                        "channel": ch,
+                        "discount_pct": scenario.discount_percentage,
+                        "segments": scenario.segments or ["ALL"],
+                    }
+                    for dept in scenario.departments
+                    for ch in scenario.channels
+                ],
+            )
+            db.merge(row)
+            db.commit()
+
             results.append(
                 {
                     "scenario": scenario,
                     "kpi": kpi,
                     "rank": rank,
                     "score": float(rank) / len(optimized),
+                    "recommendation": "Best balance of sales and margin" if rank == 1 else "Alternative",
+                    "validation": validation,
                 }
             )
 

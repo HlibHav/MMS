@@ -3,10 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Area, AreaChart, CartesianGrid, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine } from "recharts";
 import { Badge, Button, Card, PanelHeader } from "react-bits";
 import { BarChart3, MapPin, RefreshCw, Target } from "lucide-react";
-import { DiscoveryDashboard, fetchDiscoveryDashboard } from "../api";
+import { DiscoveryDashboard, fetchDiscoveryDashboard, fetchDiscoveryMonths } from "../api";
 import { useUIStore } from "../store/uiStore";
 
-const months = ["2024-10", "2024-09"];
 const geos = ["DE", "UA", "PL"];
 
 const currency = (value?: number) => (typeof value === "number" ? value.toLocaleString("en-US", { maximumFractionDigits: 0 }) : "—");
@@ -61,35 +60,33 @@ function GapVsTargetChart({ data, month }: { data: DiscoveryDashboard["gap_times
 }
 
 function DepartmentHeatmap({ data }: { data: HeatmapDatum[] }) {
-  const colorForGap = (gapPct: number) => {
-    if (gapPct > 0.15) return "bg-amber-500";
-    if (gapPct > 0.05) return "bg-orange-400";
-    if (gapPct > -0.01) return "bg-green-500";
-    return "bg-green-400";
-  };
-
   return (
-    <Card>
-      <PanelHeader title="Gap heatmap" eyebrow="Departments" />
-      <div className="mb-2 flex items-center gap-2 text-xs text-slate-600">
-        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-amber-700">+15% gap</span>
-        <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-1 text-orange-700">+5% gap</span>
-        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-green-700">On target / ahead</span>
-      </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {data.map((item) => (
-          <div
-            key={item.department}
-            className={`rounded-xl p-3 text-white shadow-card transition hover:scale-[1.01] ${colorForGap(item.gap_pct)}`}
-          >
-            <div className="flex items-center justify-between text-sm font-semibold">
-              <span>{item.department}</span>
-              <span className="rounded-md bg-white/15 px-2 py-0.5 text-xs">Sales {currency(item.sales_value)}</span>
+    <Card className="bg-slate-900 border-slate-800 text-slate-100">
+      <PanelHeader title="Department Heatmap" eyebrow="Gap vs target" />
+      <div className="space-y-4">
+        {data.map((item) => {
+          const isPositive = item.gap_pct >= 0;
+          const barColor = isPositive ? "bg-emerald-500" : "bg-rose-500";
+          const textColor = isPositive ? "text-emerald-400" : "text-rose-400";
+          return (
+            <div key={item.department} className="space-y-2">
+              <div className="flex items-center justify-between text-sm font-semibold">
+                <span className="text-slate-100">{item.department}</span>
+                <span className={`text-sm font-semibold ${textColor}`}>
+                  {item.gap_pct > 0 ? "+" : ""}
+                  {(item.gap_pct * 100).toFixed(1)}%
+                </span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-slate-800">
+                <div
+                  className={`h-2 rounded-full ${barColor}`}
+                  style={{ width: `${Math.min(Math.abs(item.gap_pct) * 100, 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-slate-400">Vol: {currency(item.sales_value)}</p>
             </div>
-            <div className="mt-2 text-2xl font-bold">{Math.round(item.gap_pct * 100)}%</div>
-            <p className="text-xs text-white/80">Gap vs target</p>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </Card>
   );
@@ -166,10 +163,19 @@ function OpportunitiesList({
             aria-pressed={selected === opp.id}
           >
             <div>
-              <p className="font-semibold text-slate-900">{opp.department} — {opp.channel}</p>
+              <p className="font-semibold text-slate-900">
+                {opp.title || opp.focus_departments?.join(", ") || opp.department || "Opportunity"} — {opp.channel || "mixed"}
+              </p>
               <p className="text-sm text-slate-600">{opp.rationale}</p>
             </div>
-            <Badge tone="success">+{currency(opp.estimated_potential)}</Badge>
+            <Badge tone="success">
+              +
+              {currency(
+                typeof opp.estimated_potential === "number"
+                  ? opp.estimated_potential
+                  : opp.estimated_potential?.sales_value
+              )}
+            </Badge>
           </button>
         ))}
       </div>
@@ -179,35 +185,58 @@ function OpportunitiesList({
 
 function OpportunityDetails({ opportunity }: { opportunity?: DiscoveryDashboard["opportunities"][number] }) {
   if (!opportunity) return null;
+  const windowStart = opportunity.promo_date_range?.start ?? opportunity.date_range?.start_date;
+  const windowEnd = opportunity.promo_date_range?.end ?? opportunity.date_range?.end_date;
+  const deptLabel = opportunity.focus_departments?.join(", ") || opportunity.department || "—";
+  const channel = opportunity.channel || "mixed";
+  const potential =
+    typeof opportunity.estimated_potential === "number"
+      ? opportunity.estimated_potential
+      : opportunity.estimated_potential?.sales_value;
   return (
     <Card>
       <PanelHeader title="Selected opportunity" eyebrow={opportunity.id} />
       <div className="space-y-2 text-sm text-slate-800">
         <div className="flex items-center gap-2">
-          <Badge tone="info">{opportunity.department}</Badge>
-          <Badge tone="muted">{opportunity.channel}</Badge>
+          <Badge tone="info">{deptLabel}</Badge>
+          <Badge tone="muted">{channel}</Badge>
         </div>
         <p className="font-semibold text-slate-900">{opportunity.rationale}</p>
-        <p className="text-slate-600">
-          Window: {opportunity.date_range.start_date} → {opportunity.date_range.end_date}
-        </p>
-        <p className="text-slate-700">Estimated potential: {currency(opportunity.estimated_potential)}</p>
+        {windowStart && windowEnd && (
+          <p className="text-slate-600">
+            Window: {windowStart} → {windowEnd}
+          </p>
+        )}
+        <p className="text-slate-700">Estimated potential: {currency(potential)}</p>
       </div>
     </Card>
   );
 }
 
 export default function DiscoveryScreen() {
-  const [month, setMonth] = useState("2024-10");
+  const [month, setMonth] = useState<string | undefined>();
   const [geo, setGeo] = useState("DE");
   const setContext = useUIStore((s) => s.setChatContext);
   const setSelected = useUIStore((s) => s.setSelectedOpportunity);
   const selectedOpportunityId = useUIStore((s) => s.selectedOpportunityId);
-  const monthLabel = new Date(`${month}-01`).toLocaleString("en-US", { month: "long", year: "numeric" });
+
+  const monthsQuery = useQuery<string[]>({
+    queryKey: ["discovery-months"],
+    queryFn: fetchDiscoveryMonths,
+  });
+
+  useEffect(() => {
+    if (!month && monthsQuery.data?.length) {
+      setMonth(monthsQuery.data[0]);
+    }
+  }, [month, monthsQuery.data]);
+
+  const monthLabel = month ? new Date(`${month}-01`).toLocaleString("en-US", { month: "long", year: "numeric" }) : "—";
 
   const dashboard = useQuery<DiscoveryDashboard, Error, DiscoveryDashboard, ["discovery-dashboard", string, string]>({
     queryKey: ["discovery-dashboard", month, geo],
-    queryFn: () => fetchDiscoveryDashboard(month, geo),
+    queryFn: () => fetchDiscoveryDashboard(month as string, geo),
+    enabled: Boolean(month),
   });
 
   useEffect(() => {
@@ -280,14 +309,16 @@ export default function DiscoveryScreen() {
               <span>Month</span>
             </div>
             <select
-              value={month}
+              value={month ?? ""}
               onChange={(e) => setMonth(e.target.value)}
-              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              disabled={monthsQuery.isLoading || monthsQuery.isError || !monthsQuery.data?.length}
+              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {months.map((m) => (
+              {monthsQuery.data?.map((m) => (
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>
+            {monthsQuery.isError && <p className="mt-2 text-xs text-error-400">Не вдалося завантажити місяці</p>}
           </div>
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-3">
             <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
@@ -333,7 +364,7 @@ export default function DiscoveryScreen() {
 
           <Card className={`shadow-card ${darkCard}`}>
             <PanelHeader title="Performance gap analysis" eyebrow="Actual vs Target" />
-            <GapVsTargetChart data={dashboard.data.gap_timeseries} month={month} />
+            <GapVsTargetChart data={dashboard.data.gap_timeseries} month={month ?? ""} />
           </Card>
 
           <div className="grid gap-4 lg:grid-cols-3">

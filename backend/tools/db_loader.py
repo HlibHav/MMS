@@ -55,26 +55,40 @@ class DatabaseLoaderTool:
             table_name: Name of the table
         """
         if self.database_url.startswith('duckdb://'):
-            # DuckDB schema
             create_sql = f"""
             CREATE TABLE IF NOT EXISTS {table_name} (
-                id BIGINT PRIMARY KEY,
                 date DATE NOT NULL,
-                channel VARCHAR(20) NOT NULL,
-                department VARCHAR(50) NOT NULL,
-                promo_flag BOOLEAN DEFAULT FALSE,
-                discount_pct NUMERIC(5,2),
-                sales_value NUMERIC(15,2) NOT NULL,
-                margin_value NUMERIC(15,2) NOT NULL,
-                margin_pct NUMERIC(5,2),
-                units INTEGER NOT NULL,
+                channel VARCHAR,
+                department VARCHAR,
+                promo_flag BOOLEAN,
+                discount_pct DOUBLE,
+                sales_value DOUBLE,
+                margin_value DOUBLE,
+                margin_pct DOUBLE,
+                units DOUBLE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        elif self.database_url.startswith('sqlite'):
+            create_sql = f"""
+            CREATE TABLE IF NOT EXISTS {table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                channel TEXT NOT NULL,
+                department TEXT NOT NULL,
+                promo_flag BOOLEAN DEFAULT 0,
+                discount_pct REAL,
+                sales_value REAL NOT NULL,
+                margin_value REAL NOT NULL,
+                margin_pct REAL,
+                units REAL NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE (date, channel, department, promo_flag)
-            )
+            );
             """
         else:
-            # PostgreSQL schema
             create_sql = f"""
             CREATE TABLE IF NOT EXISTS {table_name} (
                 id BIGSERIAL PRIMARY KEY,
@@ -94,7 +108,7 @@ class DatabaseLoaderTool:
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW(),
                 CONSTRAINT unique_sales_record UNIQUE (date, channel, department, promo_flag)
-            )
+            );
             """
         
         try:
@@ -158,7 +172,7 @@ class DatabaseLoaderTool:
         
         # Select only columns that exist in table
         table_columns = ['date', 'channel', 'department', 'promo_flag', 'discount_pct',
-                        'sales_value', 'margin_value', 'units']
+                        'sales_value', 'margin_value', 'units', 'margin_pct']
         df_load = df_load[[col for col in table_columns if col in df_load.columns]]
         
         try:
@@ -198,7 +212,11 @@ class DatabaseLoaderTool:
                         conn.execute(text(upsert_sql))
             else:
                 if self.database_url.startswith('duckdb://'):
-                    self.engine.execute(f"INSERT INTO {table_name} SELECT * FROM df_load")
+                    self.engine.register('df_temp', df_load)
+                    self.engine.execute(f"INSERT INTO {table_name} SELECT * FROM df_temp")
+                    self.engine.unregister('df_temp')
+                elif self.database_url.startswith('sqlite'):
+                    df_load.to_sql(table_name, self.engine, if_exists=if_exists, index=False)
                 else:
                     df_load.to_sql(
                         table_name,
