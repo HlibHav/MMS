@@ -77,6 +77,11 @@ class ScenarioEvaluationEngine:
         breakdown_by_channel: Dict[str, Dict[str, float]] = {}
         breakdown_by_department: Dict[str, Dict[str, float]] = {}
         
+        # Pull per-department discounts if provided in metadata
+        dept_discounts = {}
+        if scenario.metadata and isinstance(scenario.metadata, dict):
+            dept_discounts = scenario.metadata.get("department_discounts") or {}
+
         # Process each day in the scenario date range
         from datetime import date as date_type
         current_date = scenario.date_range.start_date
@@ -93,11 +98,15 @@ class ScenarioEvaluationEngine:
             # Calculate uplift for each department/channel
             for dept in scenario.departments:
                 for channel in scenario.channels:
+                    # Department-specific discount if available, else fall back to scenario-level
+                    dept_discount_pct = dept_discounts.get(dept, scenario.discount_percentage or 0.0)
+                    discount_decimal = (dept_discount_pct or 0.0) / 100.0
+
                     # Estimate uplift
                     uplift_pct = uplift_engine.estimate_uplift(
                         category=dept,
                         channel=channel,
-                        discount=scenario.discount_percentage / 100.0,
+                        discount=discount_decimal,
                         context=context
                     )
                     
@@ -108,8 +117,8 @@ class ScenarioEvaluationEngine:
                     
                     day_sales = day_baseline["sales"] * dept_factor * channel_factor * (1 + uplift_pct)
                     day_margin_pct = day_baseline["margin"] / day_baseline["sales"] if day_baseline["sales"] > 0 else 0.2
-                    # Adjust margin for discount
-                    day_margin_pct = max(0.0, day_margin_pct - (scenario.discount_percentage / 100.0))
+                    # Adjust margin for discount (department-specific)
+                    day_margin_pct = max(0.0, day_margin_pct - discount_decimal)
                     day_margin = day_sales * day_margin_pct
                     day_units = day_baseline["units"] * dept_factor * channel_factor * (1 + uplift_pct * 0.8)
                     

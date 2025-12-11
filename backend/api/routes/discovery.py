@@ -4,13 +4,15 @@ Discovery API Routes
 Endpoints for discovery and context analysis.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from typing import List, Optional
 from datetime import date
 from calendar import monthrange
 import pandas as pd
 
 from models.schemas import PromoOpportunity, PromoContext, GapAnalysis, DateRange
+from backend.api.utils.pagination import paginate_list
+from middleware.observability import trace_function
 from engines.forecast_baseline_engine import ForecastBaselineEngine
 from tools.sales_data_tool import SalesDataTool
 from tools.context_data_tool import ContextDataTool
@@ -63,6 +65,7 @@ def _serialize_context(context: PromoContext) -> dict:
 
 
 @router.post("/analyze")
+@trace_function(name="discovery.analyze")
 async def analyze_situation(payload: dict) -> dict:
     """
     Docs-aligned discovery analysis.
@@ -130,7 +133,10 @@ async def analyze_situation(payload: dict) -> dict:
 async def get_opportunities(
     month: str,
     geo: str,
-    targets: Optional[dict] = None
+    targets: Optional[dict] = None,
+    page: int = 1,
+    page_size: int = 20,
+    response: Response = None,
 ) -> List[PromoOpportunity]:
     """
     Analyze situation and identify promotional opportunities.
@@ -177,7 +183,14 @@ async def get_opportunities(
         key=lambda o: (o.estimated_potential or {}).get("sales_value", 0),
         reverse=True,
     )
-    return opportunities
+    # Paginate and add pagination headers (body stays a list to avoid breaking clients)
+    paged, meta = paginate_list(opportunities, page=page, page_size=page_size)
+    if response is not None:
+        response.headers["X-Pagination-Page"] = str(meta["page"])
+        response.headers["X-Pagination-Page-Size"] = str(meta["page_size"])
+        response.headers["X-Pagination-Total"] = str(meta["total"])
+        response.headers["X-Pagination-Total-Pages"] = str(meta["total_pages"])
+    return paged
 
 
 @router.get("/dashboard")

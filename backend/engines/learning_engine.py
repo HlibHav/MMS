@@ -22,7 +22,8 @@ class LearningEngine:
     
     def __init__(self):
         """Initialize Learning Engine."""
-        pass
+        self.adjustment_floor = 0.8
+        self.adjustment_cap = 1.2
     
     def update_uplift_model(
         self,
@@ -39,11 +40,25 @@ class LearningEngine:
         Returns:
             Updated UpliftModel with adjusted coefficients
         """
-        # TODO: Implement model update logic
-        # - Compare forecasted vs actual uplift
-        # - Adjust coefficients by category/channel
-        # - Weight recent data more heavily
-        raise NotImplementedError("update_uplift_model not yet implemented")
+        if not post_mortems or not current_model:
+            raise ValueError("post_mortems and current_model are required")
+
+        adjustments = self.calculate_model_adjustments(post_mortems)
+        new_coefficients: Dict[str, Dict[str, float]] = {}
+
+        for category, channels in current_model.coefficients.items():
+            new_coefficients[category] = {}
+            for channel, coef in channels.items():
+                factor = adjustments.get(f"{category}:{channel}") or adjustments.get("global") or 1.0
+                adjusted = coef * factor
+                adjusted = max(self.adjustment_floor * coef, min(self.adjustment_cap * coef, adjusted))
+                new_coefficients[category][channel] = adjusted
+
+        return UpliftModel(
+            coefficients=new_coefficients,
+            version=f"{current_model.version}-learned",
+            last_updated=current_model.last_updated
+        )
     
     def calculate_model_adjustments(
         self,
@@ -62,6 +77,25 @@ class LearningEngine:
         Returns:
             Dictionary with adjustment factors
         """
-        # TODO: Implement adjustment calculation logic
-        raise NotImplementedError("calculate_model_adjustments not yet implemented")
+        if not post_mortems:
+            return {"global": 1.0}
+
+        adjustments: Dict[str, float] = {}
+        pct_errors: List[float] = []
+
+        for report in post_mortems:
+            accuracy = report.forecast_accuracy or {}
+            pct_error = accuracy.get("total_sales_pct_error")
+            if pct_error is not None:
+                pct_errors.append(float(pct_error))
+
+        if pct_errors:
+            avg_error = sum(pct_errors) / len(pct_errors)
+            # If we over-forecast (negative error), reduce elasticity; under-forecast increase it.
+            factor = 1 + (-avg_error) * 0.1
+            adjustments["global"] = max(self.adjustment_floor, min(self.adjustment_cap, factor))
+        else:
+            adjustments["global"] = 1.0
+
+        return adjustments
 

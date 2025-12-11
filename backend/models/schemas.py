@@ -297,6 +297,7 @@ class QualityReport(BaseModel):
     timeliness: float
     issues: List[str]
     recommendations: List[str]
+    sample_rows: Optional[List[Dict[str, Any]]] = None
 
 
 class StorageResult(BaseModel):

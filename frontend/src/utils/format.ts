@@ -25,3 +25,6 @@ export const formatDate = (value?: string | Date, options?: Intl.DateTimeFormatO
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', ...options })
 }
 
+// Simple classnames utility
+export const cn = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ')
+

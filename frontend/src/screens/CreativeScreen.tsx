@@ -119,22 +119,40 @@ export default function CreativeScreen() {
         <Card className="space-y-3">
           <PanelHeader title="Generated assets" eyebrow="Copy & layout" />
           <div className="grid gap-3 md:grid-cols-3">
-            {assets.map((asset) => (
-              <div key={asset.asset_type} className="rounded-xl border border-border bg-surface-50 p-3">
-                <div className="flex items-center justify-between text-xs uppercase tracking-wide text-muted">
-                  <span>{asset.asset_type}</span>
-                  <FileText className="h-4 w-4 text-primary-600" />
+            {assets.map((asset) => {
+              const handleCopy = () => navigator.clipboard?.writeText(asset.copy_text);
+              const handleExport = () => {
+                const blob = new Blob([asset.copy_text], { type: "text/plain" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `${asset.asset_type}.txt`;
+                link.click();
+                URL.revokeObjectURL(url);
+              };
+              return (
+                <div key={asset.asset_type} className="rounded-xl border border-border bg-surface-50 p-3">
+                  <div className="flex items-center justify-between text-xs uppercase tracking-wide text-muted">
+                    <span>{asset.asset_type}</span>
+                    <FileText className="h-4 w-4 text-primary-600" />
+                  </div>
+                  <p className="mt-2 text-sm text-slate-900 whitespace-pre-wrap">{asset.copy_text}</p>
+                  <div className="mt-3 flex gap-2">
+                    <Button variant="ghost" size="sm" onClick={handleCopy} aria-label={`Copy ${asset.asset_type} copy`}>
+                      Copy
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={handleExport} aria-label={`Export ${asset.asset_type} copy`}>
+                      Export
+                    </Button>
+                  </div>
                 </div>
-                <p className="mt-2 text-sm text-slate-900 whitespace-pre-wrap">{asset.copy_text}</p>
-                <div className="mt-3 flex gap-2">
-                  <Button variant="ghost" size="sm">Copy</Button>
-                  <Button variant="ghost" size="sm">Export</Button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       )}
+      {assetsMutation.isPending && <p className="text-sm text-muted">Generating assets…</p>}
+      {assets.length === 0 && !assetsMutation.isPending && brief && <p className="text-sm text-muted">No assets yet. Generate to see copy.</p>}
     </div>
   );
 }

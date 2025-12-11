@@ -1,77 +1,31 @@
 """
-<<<<<<< HEAD
-Chat / Co-Pilot API Routes
-"""
-
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
-from typing import AsyncGenerator
-import asyncio
-
-from backend.models.schemas import ChatMessageRequest, ChatMessageResponse
-
-router = APIRouter()
-
-
-@router.post("/message", response_model=ChatMessageResponse)
-async def send_message(payload: ChatMessageRequest) -> ChatMessageResponse:
-    """
-    Send a chat message to the co-pilot agent.
-    """
-    if not payload.message:
-        raise HTTPException(status_code=400, detail="Message is required")
-
-    suggestions = [
-        "Try adjusting the discount on TVs",
-        "Consider focusing on loyal customers",
-    ]
-    related = {"scenario_ids": payload.context.active_scenarios} if payload.context and payload.context.active_scenarios else None
-    return ChatMessageResponse(
-        response="Scenario B offers a better balance of sales and margin.",
-        suggestions=suggestions,
-        related_data=related,
-    )
-
-
-async def _streamer(payload: ChatMessageRequest) -> AsyncGenerator[bytes, None]:
-    yield b"event: message\ndata: {\"response\":\"Thinking...\"}\n\n"
-    await asyncio.sleep(0.1)
-    yield b"event: message\ndata: {\"response\":\"Scenario B offers a better balance of sales and margin.\"}\n\n"
-    yield b"event: done\ndata: {}\n\n"
-
-
-@router.post("/stream")
-async def send_message_stream(payload: ChatMessageRequest):
-    """
-    Stream chat response (SSE).
-    """
-    return StreamingResponse(_streamer(payload), media_type="text/event-stream")
-=======
 Chat API routes.
 """
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Dict, Any, Generator
 import json
 
 from middleware.auth import get_current_user
 from middleware.rate_limit import get_rate_limit
+from middleware.errors import ValidationError
 from agents.co_pilot_agent import CoPilotAgent
 from agents.discovery_agent import DiscoveryAgent
+from agents.scenario_lab_agent import ScenarioLabAgent
 from engines.context_engine import ContextEngine
 from engines.forecast_baseline_engine import ForecastBaselineEngine
+from engines.scenario_evaluation_engine import ScenarioEvaluationEngine
+from engines.validation_engine import ValidationEngine
+from engines.uplift_elasticity_engine import UpliftElasticityEngine
 from tools.sales_data_tool import SalesDataTool
 from tools.context_data_tool import ContextDataTool
 from tools.targets_config_tool import TargetsConfigTool
 from tools.weather_tool import WeatherTool
-from agents.scenario_lab_agent import ScenarioLabAgent
-from engines.scenario_evaluation_engine import ScenarioEvaluationEngine
-from engines.validation_engine import ValidationEngine
-from engines.uplift_elasticity_engine import UpliftElasticityEngine
+from middleware.observability import trace_function
 
-router = APIRouter()
+router = APIRouter(tags=["chat"])
 
 # Shared agents/tools for chat orchestration
 _sales_tool = SalesDataTool()
@@ -100,20 +54,32 @@ _scenario_agent = ScenarioLabAgent(
 _copilot_agent = CoPilotAgent(discovery_agent=_discovery_agent, scenario_agent=_scenario_agent)
 
 
+class ChatContext(BaseModel):
+    """Lightweight context matching UI payload."""
+
+    screen: str | None = Field(default=None, description="Active screen name")
+    active_scenarios: list[str] | None = Field(default=None, description="Scenario IDs in focus")
+    metadata: Dict[str, Any] | None = Field(default=None, description="Additional context")
+
+
 class ChatRequest(BaseModel):
-    message: str
-    context: Dict[str, Any] | None = None
+    message: str = Field(..., description="User message")
+    context: ChatContext | Dict[str, Any] | None = Field(default=None, description="Optional UI context")
 
 
 @router.post("/message")
 @get_rate_limit("chat")
+@trace_function(name="chat.message")
 async def chat_message(
     payload: ChatRequest,
     request: Request,
     current_user=Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Return a single chat response."""
-    return _copilot_agent.generate_response(payload.message, payload.context or {})
+    if not payload.message:
+        raise ValidationError("Message is required", field="message")
+    context = payload.context.model_dump() if isinstance(payload.context, ChatContext) else (payload.context or {})
+    return _copilot_agent.generate_response(payload.message, context)
 
 
 def _stream_response(chunks: Generator[str, None, None]) -> Generator[bytes, None, None]:
@@ -125,12 +91,15 @@ def _stream_response(chunks: Generator[str, None, None]) -> Generator[bytes, Non
 
 @router.post("/stream")
 @get_rate_limit("chat")
+@trace_function(name="chat.stream")
 async def chat_stream(
     payload: ChatRequest,
     request: Request,
     current_user=Depends(get_current_user),
 ) -> StreamingResponse:
     """Stream chat response via SSE."""
-    stream = _stream_response(_copilot_agent.stream_response(payload.message, payload.context or {}))
+    if not payload.message:
+        raise ValidationError("Message is required", field="message")
+    context = payload.context.model_dump() if isinstance(payload.context, ChatContext) else (payload.context or {})
+    stream = _stream_response(_copilot_agent.stream_response(payload.message, context))
     return StreamingResponse(stream, media_type="text/event-stream")
->>>>>>> dbf51a57d90587fa2ae6397ac9a6c322b870fe89

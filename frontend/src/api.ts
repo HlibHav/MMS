@@ -75,7 +75,8 @@ export interface PromoScenario {
 
 export interface PromoBrief {
   month: string;
-  promo_date_range?: DateRange;
+  // Backend expects `start`/`end` keys (not start_date/end_date)
+  promo_date_range?: { start: string; end: string };
   focus_departments?: string[];
   objectives?: Record<string, any>;
   constraints?: Record<string, any>;
@@ -127,12 +128,53 @@ export interface PostMortemReport {
   insights: string[];
 }
 
+const API_ROOT = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 const client = axios.create({
-  baseURL: "http://localhost:8000/api/v1",
+  baseURL: `${API_ROOT.replace(/\/$/, "")}/api/v1`,
   headers: {
     Authorization: "Bearer test", // dev default, align with backend stub
   },
 });
+
+// Dev-only wire logging to help trace network/auth issues
+if (import.meta.env.DEV) {
+  client.interceptors.request.use((config) => {
+    // eslint-disable-next-line no-console
+    console.debug("[api] request", {
+      method: config.method,
+      url: config.url,
+      baseURL: config.baseURL,
+      params: config.params,
+      data: config.data,
+      headers: {
+        authorization: config.headers?.Authorization || config.headers?.authorization,
+      },
+    });
+    return config;
+  });
+
+  client.interceptors.response.use(
+    (response) => {
+      // eslint-disable-next-line no-console
+      console.debug("[api] response", {
+        url: response.config.url,
+        status: response.status,
+        data: response.data,
+      });
+      return response;
+    },
+    (error) => {
+      // eslint-disable-next-line no-console
+      console.error("[api] error", {
+        url: error.config?.url,
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message,
+      });
+      return Promise.reject(error);
+    },
+  );
+}
 
 export const fetchBaseline = async (start: string, end: string) => {
   const res = await client.get("/data/baseline", { params: { start_date: start, end_date: end } });
@@ -199,14 +241,17 @@ export const compareScenarios = async (scenarios: PromoScenario[]) => {
   return res.data;
 };
 
-export const optimizeScenarios = async (brief: string, constraints?: Record<string, any>) => {
-  const res = await client.post("/optimization/optimize", { brief, constraints });
-  return res.data as PromoScenario[];
+export const optimizeScenarios = async (brief: string, constraints?: Record<string, any>, objectives?: Record<string, any>) => {
+  const res = await client.post("/optimization/generate", { brief, constraints, objectives });
+  return res.data as {
+    scenarios: { scenario: PromoScenario; kpi: any; validation: any; rank: number; score: number }[];
+    efficient_frontier?: { points: { sales: number; margin: number; ebit: number; scenario_id: string }[]; pareto_optimal: string[] };
+  };
 };
 
 export const getFrontier = async (scenarios: PromoScenario[]) => {
   const res = await client.post("/optimization/frontier", scenarios);
-  return res.data;
+  return res.data as { scenarios: PromoScenario[]; coordinates: [number, number][]; pareto_optimal: boolean[] };
 };
 
 export const generateCreativeBrief = async (scenario: PromoScenario) => {

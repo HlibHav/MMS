@@ -94,6 +94,24 @@ def _build_default_scenario(
 
     start_date = _coerce(start_raw)
     end_date = _coerce(end_raw)
+
+    dept_discounts: Dict[str, float] = {}
+    if params.get("department_discounts"):
+        dept_discounts = {
+            k: float(v)
+            for k, v in params.get("department_discounts", {}).items()
+            if v is not None
+        }
+    elif brief.constraints and isinstance(brief.constraints, dict):
+        dd = brief.constraints.get("department_discounts")
+        if isinstance(dd, dict):
+            dept_discounts = {k: float(v) for k, v in dd.items() if v is not None}
+
+    # If per-department discounts provided, use their average as the scenario-level discount
+    discount_from_map = None
+    if dept_discounts:
+        discount_from_map = sum(dept_discounts.values()) / len(dept_discounts)
+
     return PromoScenario(
         id=str(uuid.uuid4()),
         name=params.get("name", f"{brief.month} {params.get('label', 'Scenario')}"),
@@ -104,9 +122,13 @@ def _build_default_scenario(
         ),
         departments=params.get("departments", brief.focus_departments or ["TV", "Gaming"]),
         channels=params.get("channels", ["online", "store"]),
-        discount_percentage=float(params.get("discount_pct", params.get("discount_percentage", 15.0))),
+        discount_percentage=float(params.get("discount_pct", params.get("discount_percentage", discount_from_map if discount_from_map is not None else 15.0))),
         segments=params.get("segments"),
-        metadata={"objectives": brief.objectives or {}, "constraints": brief.constraints or {}},
+        metadata={
+            "objectives": brief.objectives or {},
+            "constraints": brief.constraints or {},
+            "department_discounts": dept_discounts,
+        },
     )
 
 
@@ -164,11 +186,19 @@ def _persist_scenario(db: Session, scenario: PromoScenario, scenario_type: str) 
     return row
 
 
-def _persist_kpi(db: Session, scenario_id: str, kpi: ScenarioKPI) -> db_models.ScenarioKPI:
+def _persist_kpi(db: Session, scenario_id: str, kpi: ScenarioKPI, scenario: PromoScenario | None = None) -> db_models.ScenarioKPI:
     row = db_models.ScenarioKPI(
         scenario_id=scenario_id,
-        period_start=kpi.breakdown_by_channel.get("period_start") if isinstance(kpi.breakdown_by_channel, dict) else scenario_agent.forecast_engine.targets_tool and None,  # type: ignore[arg-type]
-        period_end=kpi.breakdown_by_channel.get("period_end") if isinstance(kpi.breakdown_by_channel, dict) else None,  # type: ignore[arg-type]
+        period_start=(
+            scenario.date_range.start_date
+            if scenario
+            else (kpi.breakdown_by_channel.get("period_start") if isinstance(kpi.breakdown_by_channel, dict) else None)  # type: ignore[arg-type]
+        ),
+        period_end=(
+            scenario.date_range.end_date
+            if scenario
+            else (kpi.breakdown_by_channel.get("period_end") if isinstance(kpi.breakdown_by_channel, dict) else None)  # type: ignore[arg-type]
+        ),
         total_sales_value=kpi.total_sales,
         total_margin_value=kpi.total_margin,
         total_margin_pct=(kpi.total_margin / kpi.total_sales * 100) if kpi.total_sales else 0,
@@ -189,10 +219,16 @@ def _persist_kpi(db: Session, scenario_id: str, kpi: ScenarioKPI) -> db_models.S
 
 
 def _persist_validation(db: Session, scenario_id: str, validation: ValidationReport) -> db_models.ValidationReport:
+    issues_payload = []
+    for issue in getattr(validation, "issues", []) or []:
+        if hasattr(issue, "model_dump"):
+            issues_payload.append(issue.model_dump())
+        else:
+            issues_payload.append(issue)
     row = db_models.ValidationReport(
         scenario_id=scenario_id,
         status=getattr(validation, "status", None) or ("PASS" if getattr(validation, "is_valid", False) else "WARN"),
-        issues=getattr(validation, "issues", []),
+        issues=issues_payload,
         overall_score=getattr(validation, "overall_score", None),
     )
     db.add(row)
@@ -210,7 +246,7 @@ async def create_scenario(payload: CreateScenarioRequest, db: Session = Depends(
     validation = scenario_agent.validate_scenario(scenario, kpi)
 
     row = _persist_scenario(db, scenario, payload.scenario_type)
-    _persist_kpi(db, scenario.id or row.id, kpi)
+    _persist_kpi(db, scenario.id or row.id, kpi, scenario)
     _persist_validation(db, scenario.id or row.id, validation)
     db.commit()
 
@@ -302,7 +338,7 @@ async def update_scenario(scenario_id: str, updated: UpdateScenarioRequest, db: 
     kpi = scenario_agent.evaluate_scenario(scenario, geo="DE")
     validation = scenario_agent.validate_scenario(scenario, kpi, geo="DE")
 
-    _persist_kpi(db, row.id, kpi)
+    _persist_kpi(db, row.id, kpi, scenario)
     _persist_validation(db, row.id, validation)
     db.commit()
 
@@ -339,7 +375,7 @@ async def evaluate_scenario(
     try:
         kpi = scenario_agent.evaluate_scenario(scenario, geo="DE")
         validation = scenario_agent.validate_scenario(scenario, kpi, geo="DE")
-        _persist_kpi(db, scenario.id or str(uuid.uuid4()), kpi)
+        _persist_kpi(db, scenario.id or str(uuid.uuid4()), kpi, scenario)
         _persist_validation(db, scenario.id or str(uuid.uuid4()), validation)
         db.commit()
         return {"kpi": kpi, "validation": validation}
@@ -428,9 +464,11 @@ async def compare_scenarios(
         if kpis:
             best_sales_idx = max(range(len(kpis)), key=lambda i: kpis[i].total_sales)
             best_margin_idx = max(range(len(kpis)), key=lambda i: kpis[i].total_margin)
+            best_ebit_idx = max(range(len(kpis)), key=lambda i: kpis[i].total_ebit if kpis[i].total_ebit is not None else 0)
             summary = {
                 "best_sales": scenarios[best_sales_idx].id or f"scenario_{best_sales_idx+1}",
                 "best_margin": scenarios[best_margin_idx].id or f"scenario_{best_margin_idx+1}",
+                "best_ebit": scenarios[best_ebit_idx].id or f"scenario_{best_ebit_idx+1}",
             }
             if best_sales_idx == best_margin_idx:
                 recommendations.append("Best balance of sales and margin")

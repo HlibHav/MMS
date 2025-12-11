@@ -70,9 +70,15 @@ async def optimize_scenarios(
     try:
         brief = payload.get("brief", {})
         constraints = payload.get("constraints") or {}
+        objectives = payload.get("objectives") or {}
         num_scenarios = max(int(payload.get("num_scenarios", 3)), 1)
 
-        optimized = optimization_agent.optimize_scenarios(brief, constraints)[: num_scenarios]
+        weights = objectives.get("weights") or {"sales": 0.5, "margin": 0.3, "ebit": 0.2}
+        total_weight = sum(weights.values()) or 1.0
+        weights = {k: v / total_weight for k, v in weights.items()}
+
+        constraints_with_weights = {**constraints, "weights": weights}
+        optimized = optimization_agent.optimize_scenarios(brief, constraints_with_weights)[: num_scenarios]
 
         results = []
         for rank, scenario in enumerate(optimized, start=1):
@@ -100,30 +106,64 @@ async def optimize_scenarios(
             db.merge(row)
             db.commit()
 
+            sales_val = float(kpi.total_sales or 0)
+            margin_val = float(kpi.total_margin or 0)
+            ebit_val = float(kpi.total_ebit or 0)
+
+            score = (
+                weights.get("sales", 0) * sales_val
+                + weights.get("margin", 0) * margin_val
+                + weights.get("ebit", 0) * ebit_val
+            )
+
             results.append(
                 {
                     "scenario": scenario,
                     "kpi": kpi,
                     "rank": rank,
-                    "score": float(rank) / len(optimized),
+                    "score": score,
                     "recommendation": "Best balance of sales and margin" if rank == 1 else "Alternative",
                     "validation": validation,
                 }
             )
 
-        frontier_points = [
-            {
-                "sales": item["kpi"].total_sales,
-                "margin": (item["kpi"].total_margin / item["kpi"].total_sales * 100) if item["kpi"].total_sales else 0,
-                "ebit": item["kpi"].total_ebit,
-                "scenario_id": item["scenario"].id,
-            }
-            for item in results
-        ]
+        # Re-rank by computed score
+        results.sort(key=lambda item: item["score"], reverse=True)
+        for idx, item in enumerate(results, start=1):
+            item["rank"] = idx
+
+        frontier_points = []
+        for item in results:
+            kpi = item["kpi"]
+            sales_val = float(kpi.total_sales or 0)
+            margin_pct = (kpi.total_margin / kpi.total_sales * 100) if kpi.total_sales else 0
+            frontier_points.append(
+                {
+                    "sales": sales_val,
+                    "margin": margin_pct,
+                    "ebit": float(kpi.total_ebit or 0),
+                    "scenario_id": item["scenario"].id,
+                }
+            )
+
+        # Pareto optimal ids (sales vs margin)
+        pareto_ids: List[str] = []
+        for i, point in enumerate(frontier_points):
+            dominated = False
+            for j, other in enumerate(frontier_points):
+                if i == j:
+                    continue
+                if (other["sales"] >= point["sales"] and other["margin"] >= point["margin"]) and (
+                    other["sales"] > point["sales"] or other["margin"] > point["margin"]
+                ):
+                    dominated = True
+                    break
+            if not dominated:
+                pareto_ids.append(point["scenario_id"])
 
         return {
             "scenarios": results,
-            "efficient_frontier": {"points": frontier_points, "pareto_optimal": [p["scenario_id"] for p in frontier_points]},
+            "efficient_frontier": {"points": frontier_points, "pareto_optimal": pareto_ids},
         }
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Error optimizing scenarios: {str(exc)}") from exc

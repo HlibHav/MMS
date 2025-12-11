@@ -5,14 +5,17 @@ Endpoints for data processing and ETL operations.
 """
 
 import os
+import uuid
 import tempfile
-from fastapi import APIRouter, HTTPException, UploadFile, File, Request, Depends
-from typing import List
+from fastapi import APIRouter, HTTPException, UploadFile, File, Request, Depends, Response
+from typing import List, Dict, Any
 from datetime import date
 
 from middleware.rate_limit import get_rate_limit
 from middleware.auth import get_current_user, require_promo_lead
 from middleware.errors import ProcessingError, ValidationError
+from backend.api.utils.pagination import paginate_list
+from middleware.observability import trace_function
 
 from engines.forecast_baseline_engine import ForecastBaselineEngine
 from tools.sales_data_tool import SalesDataTool
@@ -25,10 +28,14 @@ sales_tool = SalesDataTool()
 targets_tool = TargetsConfigTool()
 baseline_engine = ForecastBaselineEngine(sales_data_tool=sales_tool, targets_tool=targets_tool)
 
+# Lightweight in-memory job tracking for data processing
+_JOBS: Dict[str, Dict[str, Any]] = {}
+
 
 
 @router.post("/process-xlsb")
 @get_rate_limit("data_processing")
+@trace_function(name="data.process_xlsb")
 async def process_xlsb_files(
     files: List[UploadFile] = File(...),
     request: Request = None,
@@ -52,7 +59,15 @@ async def process_xlsb_files(
     
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
-    
+
+    job_id = f"job_{uuid.uuid4().hex}"
+    _JOBS[job_id] = {
+        "status": "processing",
+        "processed_files": [],
+        "storage_result": None,
+        "total_rows": 0,
+    }
+
     try:
         # Initialize tools
         xlsb_reader = XLSBReaderTool()
@@ -86,6 +101,7 @@ async def process_xlsb_files(
                 
                 # Validate data
                 quality_report = data_validator.validate_data_quality(df_clean)
+                quality_report["sample_rows"] = df_clean.head(5).to_dict(orient="records")
                 
                 dataframes[file.filename] = df_clean
                 
@@ -95,6 +111,13 @@ async def process_xlsb_files(
                     "quality_score": quality_report.get("overall_score", 0.0),
                     "issues_count": len(quality_report.get("issues", []))
                 })
+                _JOBS[job_id]["processed_files"].append(
+                    {
+                        "filename": file.filename,
+                        "rows": len(df_clean),
+                        "quality": quality_report,
+                    }
+                )
             except Exception as e:
                 processed_files.append({
                     "filename": file.filename,
@@ -120,6 +143,7 @@ async def process_xlsb_files(
                 table_name=load_result.get("table_name", "sales_aggregated"),
                 errors=[load_result["message"]] if not load_result["success"] else None
             )
+            _JOBS[job_id]["storage_result"] = storage_result.model_dump()
         
         # Cleanup temp files
         for tmp_file in temp_files:
@@ -129,19 +153,37 @@ async def process_xlsb_files(
                 pass
         
         db_loader.close()
-        
+        total_rows = len(merged_df) if merged_df is not None else 0
+        _JOBS[job_id]["status"] = "completed"
+        _JOBS[job_id]["total_rows"] = total_rows
+        _JOBS[job_id]["storage_result"] = storage_result.model_dump() if storage_result else None
+
         return {
+            "job_id": job_id,
             "processed_files": processed_files,
-            "total_rows": len(merged_df) if merged_df is not None else 0,
+            "total_rows": total_rows,
             "storage_result": storage_result.model_dump() if storage_result else None
         }
     except Exception as exc:  # noqa: BLE001
+        _JOBS[job_id]["status"] = "failed"
+        _JOBS[job_id]["error"] = str(exc)
         raise HTTPException(status_code=500, detail=f"Error processing files: {str(exc)}") from exc
 
 
+@router.get("/jobs/{job_id}")
+async def get_processing_job(job_id: str) -> dict:
+    """Return status/details for a processing job."""
+    job = _JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"job_id": job_id, **job}
+
+
 @router.get("/quality")
+@trace_function(name="data.quality")
 async def get_quality_report(
-    dataset_id: str
+    dataset_id: str | None = None,
+    job_id: str | None = None
 ) -> QualityReport:
     """
     Get data quality report for a dataset.
@@ -158,10 +200,25 @@ async def get_quality_report(
     from datetime import date, timedelta
     
     try:
+        # Reuse quality data from a completed job when provided
+        if job_id and job_id in _JOBS:
+            job = _JOBS[job_id]
+            files = job.get("processed_files", [])
+            if files:
+                q = files[0].get("quality", {})
+                return QualityReport(
+                    completeness=q.get("completeness", 0.0),
+                    accuracy=q.get("accuracy", 0.0),
+                    consistency=q.get("consistency", 0.0),
+                    timeliness=q.get("timeliness", 0.0),
+                    issues=[issue.get("message", str(issue)) for issue in q.get("issues", [])],
+                    recommendations=q.get("recommendations", []),
+                    sample_rows=q.get("sample_rows"),
+                )
+
         data_validator = DataValidationTool()
         
         # For MVP: load data from sales tool or database
-        # In production, this would query by dataset_id
         sales_tool = SalesDataTool()
         
         # Get recent data (last 90 days) as sample
@@ -189,13 +246,16 @@ async def get_quality_report(
         if quality_data.get("timeliness", 1.0) < 0.9:
             recommendations.append("Ensure data is up-to-date and timely")
         
+        sample_rows = df.head(5).to_dict(orient="records") if not df.empty else []
+        
         return QualityReport(
             completeness=quality_data.get("completeness", 0.0),
             accuracy=quality_data.get("accuracy", 0.0),
             consistency=quality_data.get("consistency", 0.0),
             timeliness=quality_data.get("timeliness", 0.0),
             issues=issues_list,
-            recommendations=recommendations
+            recommendations=recommendations,
+            sample_rows=sample_rows,
         )
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Error generating quality report: {str(exc)}") from exc
@@ -228,7 +288,11 @@ async def get_baseline(
 
 
 @router.get("/segments")
-async def get_segments() -> dict:
+async def get_segments(
+    page: int = 1,
+    page_size: int = 20,
+    response: Response = None,
+) -> dict:
     """Return demo CDP segments."""
     segments = [
         {
@@ -250,7 +314,13 @@ async def get_segments() -> dict:
             "description": "Acquired in last 90 days",
         },
     ]
-    return {"segments": segments}
+    paged, meta = paginate_list(segments, page=page, page_size=page_size)
+    if response is not None:
+        response.headers["X-Pagination-Page"] = str(meta["page"])
+        response.headers["X-Pagination-Page-Size"] = str(meta["page_size"])
+        response.headers["X-Pagination-Total"] = str(meta["total"])
+        response.headers["X-Pagination-Total-Pages"] = str(meta["total_pages"])
+    return {"segments": paged, "pagination": meta}
 
 
 @router.get("/uplift-model")

@@ -79,42 +79,42 @@ async def get_current_user(
     """
     Get current authenticated user from JWT token.
     
-    For development: Returns a mock user if no token provided.
+    For development: allow missing or dummy tokens ("test", "dev", "local").
     """
-    environment = os.getenv("ENVIRONMENT", "development")
-    
-    # Skip auth in development if no token provided
-    if environment == "development" and not credentials:
+    environment = os.getenv("ENVIRONMENT", "development").lower()
+    token = credentials.credentials if credentials else None
+
+    # Dev passthrough: accept no token or known dummy tokens
+    if environment == "development" and (not token or token in {"test", "dev", "local"}):
         return User(
             user_id="dev_user",
             email="dev@example.com",
-            roles=[Role.ADMIN]
+            roles=[Role.ADMIN],
         )
-    
-    if not credentials:
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    token = credentials.credentials
+
     payload = verify_token(token)
-    
+
     user_id: str = payload.get("sub")
     email: str = payload.get("email", "")
     roles: List[str] = payload.get("roles", [Role.VIEWER.value])
-    
+
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",
         )
-    
+
     user_roles = [Role(role) for role in roles if role in [r.value for r in Role]]
     if not user_roles:
         user_roles = [Role.VIEWER]
-    
+
     return User(user_id=user_id, email=email, roles=user_roles)
 
 

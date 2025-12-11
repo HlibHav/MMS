@@ -22,6 +22,7 @@ export default function App() {
   const setActiveTab = useUIStore((s) => s.setActiveTab);
   const isSidebarCollapsed = useUIStore((s) => s.isSidebarCollapsed);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
+  const isChatOpen = useUIStore((s) => s.isChatOpen);
   const setChatOpen = useUIStore((s) => s.setChatOpen);
 
   useEffect(() => {
@@ -114,6 +115,16 @@ export default function App() {
               placeholder="Search or ask..."
               aria-label="Search"
             />
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Open chat sidebar"
+              onClick={() => setChatOpen(!isChatOpen)}
+              title={isChatOpen ? "Hide Co-Pilot" : "Open Co-Pilot"}
+              aria-pressed={isChatOpen}
+            >
+              <span className="text-lg leading-none">💬</span>
+            </Button>
             <Button variant="ghost" size="sm" aria-label="Notifications">
               Notifications
             </Button>
@@ -126,9 +137,25 @@ export default function App() {
           </div>
         </header>
         <div className="flex flex-col gap-4 pb-32">{renderTab()}</div>
+      </div>
 
-        <div className="pointer-events-auto fixed bottom-6 right-6 hidden w-[360px] drop-shadow-2xl lg:block">
-          <ChatWidget />
+      {/* Desktop right-side panel toggleable by button */}
+      <div className="pointer-events-none fixed inset-y-4 right-4 z-30 hidden w-[380px] transition duration-200 ease-in-out lg:block">
+        <div
+          className={`pointer-events-auto rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200/80 transform transition duration-200 ${
+            isChatOpen ? "translate-x-0 opacity-100" : "translate-x-[420px] opacity-0"
+          }`}
+        >
+          <ChatWidget
+            aria-label="Chat widget"
+            showHeader
+            onClose={() => setChatOpen(false)}
+            footerActions={
+              <Button variant="ghost" size="sm" onClick={() => setChatOpen(false)}>
+                Close
+              </Button>
+            }
+          />
         </div>
       </div>
 

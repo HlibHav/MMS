@@ -13,9 +13,13 @@ Checks:
 - Brand compliance
 """
 
+import logging
 from typing import Optional, Dict, Any, List
 
-from models.schemas import PromoScenario, ScenarioKPI, ValidationReport
+from models.schemas import PromoScenario, ScenarioKPI, ValidationReport, ValidationIssue
+
+
+logger = logging.getLogger(__name__)
 from tools.targets_config_tool import TargetsConfigTool
 
 
@@ -65,6 +69,12 @@ class ValidationEngine:
             max_discount = constraints.max_discount * 100 if constraints else 25.0
             issues.append(f"Discount {scenario.discount_percentage}% exceeds maximum allowed {max_discount}%")
             fixes.append(f"Reduce discount to {max_discount}% or less")
+        if scenario.discount_percentage is not None and scenario.discount_percentage < 0:
+            issues.append("Discount cannot be negative")
+            fixes.append("Set discount to 0 or a positive value within allowed range")
+            checks_passed["discount_non_negative"] = False
+        else:
+            checks_passed["discount_non_negative"] = True
         
         # Check margin thresholds if KPI provided
         if kpi:
@@ -91,6 +101,17 @@ class ValidationEngine:
             checks_passed["departments"] = False
         else:
             checks_passed["departments"] = True
+            if constraints and constraints.category_restrictions:
+                disallowed = [
+                    dept for dept in scenario.departments
+                    if constraints.category_restrictions and dept not in constraints.category_restrictions
+                ]
+                if disallowed:
+                    issues.append(f"Departments not allowed: {', '.join(disallowed)}")
+                    fixes.append("Remove restricted departments or update constraints")
+                    checks_passed["category_restrictions"] = False
+                else:
+                    checks_passed["category_restrictions"] = True
         
         if not scenario.channels:
             issues.append("No channels specified")
@@ -126,13 +147,38 @@ class ValidationEngine:
                 checks_passed["brand_compliance"] = False
             else:
                 checks_passed["brand_compliance"] = True
+            prohibited = set(brand_rules.prohibited_content or [])
+            scenario_copy = (scenario.metadata or {}).get("copy_preview", "") or ""
+            for bad in prohibited:
+                if bad.lower() in scenario_copy.lower():
+                    issues.append(f"Prohibited content detected: {bad}")
+                    fixes.append("Remove prohibited content from scenario copy")
+                    checks_passed["brand_compliance"] = False
+                    break
         
         is_valid = len(issues) == 0
-        
+
+        # Normalize issues into ValidationIssue objects for pydantic
+        issue_objs: List[ValidationIssue] = [
+            issue if isinstance(issue, ValidationIssue) else ValidationIssue(message=str(issue))
+            for issue in issues
+        ]
+        status = "PASS" if is_valid else "WARN"
+
+        logger.info(
+            "validation result scenario=%s status=%s issues=%s fixes=%s checks=%s",
+            scenario.id or "unknown",
+            status,
+            [i.message for i in issue_objs],
+            fixes,
+            checks_passed,
+        )
+
         return ValidationReport(
             scenario_id=scenario.id or "unknown",
+            status=status,
             is_valid=is_valid,
-            issues=issues,
+            issues=issue_objs,
             fixes=fixes,
             checks_passed=checks_passed
         )
@@ -145,6 +191,8 @@ class ValidationEngine:
         constraints = self.config_tool.get_promo_constraints() if self.config_tool else None
         max_discount = constraints.max_discount * 100 if constraints else 25.0
         
+        if scenario.discount_percentage is None:
+            return False
         return scenario.discount_percentage <= max_discount
     
     def check_margin_thresholds(
