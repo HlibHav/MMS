@@ -139,7 +139,6 @@ const client = axios.create({
 // Dev-only wire logging to help trace network/auth issues
 if (import.meta.env.DEV) {
   client.interceptors.request.use((config) => {
-    // eslint-disable-next-line no-console
     console.debug("[api] request", {
       method: config.method,
       url: config.url,
@@ -155,7 +154,6 @@ if (import.meta.env.DEV) {
 
   client.interceptors.response.use(
     (response) => {
-      // eslint-disable-next-line no-console
       console.debug("[api] response", {
         url: response.config.url,
         status: response.status,
@@ -164,7 +162,6 @@ if (import.meta.env.DEV) {
       return response;
     },
     (error) => {
-      // eslint-disable-next-line no-console
       console.error("[api] error", {
         url: error.config?.url,
         status: error.response?.status,
