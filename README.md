@@ -172,6 +172,26 @@ The system uses Phoenix Arize for:
 - Scenario evaluation tracking
 - Error and latency monitoring
 
+## 👥 Project Team
+
+### Core Team
+
+**Anton Iemelianov** - Product Manager  
+[LinkedIn](https://www.linkedin.com/in/aiemelianov/)
+- Product vision & strategy
+- Business requirements & use cases
+- Discovery & Scenario Lab features
+- Data analysis & insights workflows
+- Stakeholder management
+
+**Glib Gavryliuk** - Product Manager  
+[LinkedIn](https://www.linkedin.com/in/glebaz/)
+- Product roadmap & prioritization
+- Optimization & Creative features
+- Post-mortem analytics & learning
+- Technical architecture decisions
+- User experience & interface design
+
 ## 🤝 Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
