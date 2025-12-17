@@ -71,7 +71,7 @@ DATABASE_URL=duckdb:///tmp/mms_data.duckdb ./scripts/run-dev.sh
 ```bash
 cd backend
 source .venv/bin/activate  # or your venv
-export PYTHONPATH="${PWD}:${PYTHONPATH}"
+export PYTHONPATH="$(cd .. && pwd):${PYTHONPATH}"
 export DATABASE_URL="sqlite:///tmp/mms_data.db"
 uvicorn backend.api.main:app --reload --host 0.0.0.0 --port 8000
 ```
