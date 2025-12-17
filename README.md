@@ -178,7 +178,14 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
 ## 📄 License
 
-[Specify license]
+**Proprietary - All Rights Reserved**
+
+Copyright (c) 2025 Anton Iemelianov, Glib Gavryliuk
+
+This software is proprietary and confidential. Unauthorized use, copying, modification, 
+or distribution is strictly prohibited without explicit written permission.
+
+See [LICENSE](./LICENSE) file for full terms.
 
 ## 🎯 Roadmap
 
