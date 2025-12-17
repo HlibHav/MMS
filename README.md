@@ -112,15 +112,50 @@ cp .env.example .env
 
 ### Running the Application
 
+**Option 1: Quick Start (Recommended)**
+```bash
+# Run both backend and frontend together
+./scripts/run-dev.sh
+```
+- Backend: http://localhost:8000
+- Frontend: http://localhost:5173
+- Auto-reload enabled for both services
+
+**Option 2: Simple Runner**
+```bash
+# Alternative simple runner
+./run_app.sh
+```
+
+**Option 3: Docker Compose (Production-like)**
+```bash
+docker-compose up
+```
+- Backend: http://localhost:8000
+- Frontend: http://localhost:3000
+
+**Option 4: Manual (Separate Terminals)**
 ```bash
 # Terminal 1: Backend
 cd backend
-uvicorn api.main:app --reload
+export PYTHONPATH="${PWD}:${PYTHONPATH}"
+uvicorn backend.api.main:app --reload --host 0.0.0.0 --port 8000
 
 # Terminal 2: Frontend
 cd frontend
-npm run dev
+npm run dev -- --host --port 5173
 ```
+
+**Custom Ports:**
+```bash
+# Dev script
+BACKEND_PORT=9000 FRONTEND_PORT=3000 ./scripts/run-dev.sh
+
+# Simple script
+UVICORN_PORT=9000 VITE_PORT=3000 ./run_app.sh
+```
+
+For more run options, see [APP_VERSIONS.md](./APP_VERSIONS.md)
 
 ## 📚 Documentation
 
@@ -171,6 +206,27 @@ The system uses Phoenix Arize for:
 - Agent performance metrics
 - Scenario evaluation tracking
 - Error and latency monitoring
+
+## 👥 Project Team
+
+### Core Team
+
+**Anton Iemelianov** - Product Manager  
+[LinkedIn](https://www.linkedin.com/in/aiemelianov/)
+- Product vision & strategy
+- Business requirements & use cases
+- Discovery & Scenario Lab features
+- Data analysis & insights workflows
+- Stakeholder management
+
+**Glib Gavryliuk** - Product Manager  
+[LinkedIn](https://www.linkedin.com/in/glebaz/)
+- Product roadmap & prioritization
+- Optimization & Creative features
+- Post-mortem analytics & learning
+- Technical architecture decisions
+- User experience & interface design
+
 
 ## 🤝 Contributing
 
