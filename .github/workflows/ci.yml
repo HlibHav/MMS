@@ -45,10 +45,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: "20"  # Use Node.js 20 for better compatibility with modern dependencies
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
@@ -61,6 +61,6 @@ jobs:
           CI: "true"
 
       - name: Test
-        run: npm run test -- --runInBand
+        run: npm run test -- --run
         env:
           CI: "true"

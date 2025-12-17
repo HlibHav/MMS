@@ -14,3 +14,19 @@ tmp_dir.mkdir(exist_ok=True)
 # Set default test database URL if not already set
 if "DATABASE_URL" not in os.environ:
     os.environ.setdefault("DATABASE_URL", f"sqlite:///{tmp_dir}/test_mms.db")
+
+# Import database models and create tables before tests run
+import pytest
+from db.models import Base
+from db.session import get_engine
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_database():
+    """Create all database tables before running tests."""
+    engine = get_engine()
+    # Create all tables defined in models
+    Base.metadata.create_all(bind=engine)
+    yield
+    # Cleanup: drop all tables after tests (optional, comment out if you want to keep test data)
+    # Base.metadata.drop_all(bind=engine)
