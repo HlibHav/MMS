@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT="/Users/Glebazzz/MMS_clean"
+
+# Get the directory where this script is located
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_PORT="${BACKEND_PORT:-8020}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 VITE_API_URL="${VITE_API_URL:-http://localhost:${BACKEND_PORT}}"
 
 cd "$ROOT"
-PYTHONPATH=./backend:. uvicorn backend.api.main:app --reload --host 0.0.0.0 --port "${BACKEND_PORT}" &
+export PYTHONPATH="${ROOT}:${ROOT}/backend:${PYTHONPATH:-}"
+uvicorn backend.api.main:app --reload --host 0.0.0.0 --port "${BACKEND_PORT}" &
 BACK_PID=$!
 
 cd frontend
 VITE_API_URL="${VITE_API_URL}" npm run dev -- --host 0.0.0.0 --port "${FRONTEND_PORT}"
 
-kill "${BACK_PID}"
+# Cleanup: kill backend when frontend exits
+trap "kill ${BACK_PID} 2>/dev/null || true" EXIT
+kill "${BACK_PID}" 2>/dev/null || true
