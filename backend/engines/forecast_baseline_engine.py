@@ -77,7 +77,11 @@ class ForecastBaselineEngine:
         daily_projections: Dict[date, Dict[str, float]] = {}
         totals = {"sales_value": 0.0, "margin_value": 0.0, "units": 0.0}
 
-        for current_date in pd.date_range(start=start_date, end=end_date, freq="D"):
+        # Convert date objects to Timestamps for pd.date_range to avoid comparison issues
+        start_ts = pd.Timestamp(start_date) if isinstance(start_date, date) else pd.to_datetime(start_date)
+        end_ts = pd.Timestamp(end_date) if isinstance(end_date, date) else pd.to_datetime(end_date)
+        
+        for current_date in pd.date_range(start=start_ts, end=end_ts, freq="D"):
             dow = current_date.day_name()
             if dow in dow_means.index:
                 row = dow_means.loc[dow]
@@ -89,6 +93,7 @@ class ForecastBaselineEngine:
                 "margin": float(row["margin_value"]),
                 "units": float(row["units"]),
             }
+            # Convert Timestamp to date for dictionary key
             daily_projections[current_date.date()] = day_projection
             totals["sales_value"] += day_projection["sales"]
             totals["margin_value"] += day_projection["margin"]

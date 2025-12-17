@@ -1,6 +1,11 @@
 import os
 import pytest
+from pathlib import Path
 from fastapi.testclient import TestClient
+
+# Ensure tmp directory exists for test database
+tmp_dir = Path("./tmp")
+tmp_dir.mkdir(exist_ok=True)
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./tmp/test_mms.db")
 from backend.api.main import app  # noqa: E402

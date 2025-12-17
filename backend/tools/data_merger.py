@@ -138,13 +138,19 @@ class DataMergerTool:
             if df1 is None or df1.empty or 'date' not in df1.columns:
                 continue
             
-            date_range1 = (df1['date'].min(), df1['date'].max())
+            # Convert to Timestamp for consistent comparison
+            date_range1_min = pd.to_datetime(df1['date'].min())
+            date_range1_max = pd.to_datetime(df1['date'].max())
+            date_range1 = (date_range1_min, date_range1_max)
             
             for j, (path2, df2) in enumerate(file_list[i+1:], start=i+1):
                 if df2 is None or df2.empty or 'date' not in df2.columns:
                     continue
                 
-                date_range2 = (df2['date'].min(), df2['date'].max())
+                # Convert to Timestamp for consistent comparison
+                date_range2_min = pd.to_datetime(df2['date'].min())
+                date_range2_max = pd.to_datetime(df2['date'].max())
+                date_range2 = (date_range2_min, date_range2_max)
                 
                 # Check for overlap
                 if date_range1[0] <= date_range2[1] and date_range2[0] <= date_range1[1]:
