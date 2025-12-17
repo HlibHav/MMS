@@ -37,7 +37,7 @@ def test_scenarios_create_and_get(client):
     payload = {
         "brief": {
             "month": "2024-10",
-            "promo_date_range": {"start_date": "2024-10-01", "end_date": "2024-10-07"},
+            "promo_date_range": {"start": "2024-10-01", "end": "2024-10-07"},
             "focus_departments": ["TV"],
             "objectives": {"geo": "DE"},
             "constraints": {},

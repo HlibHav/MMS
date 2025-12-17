@@ -52,8 +52,12 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Clean install (remove stale dependencies)
+        run: |
+          # Remove node_modules and package-lock.json to force clean rebuild
+          # This ensures all optional dependencies (like @rollup/rollup-linux-x64-gnu) are properly fetched
+          rm -rf node_modules package-lock.json
+          npm install
 
       - name: Lint
         run: npm run lint

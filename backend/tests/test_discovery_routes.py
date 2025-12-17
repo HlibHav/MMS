@@ -29,7 +29,13 @@ def test_discovery_opportunities(client: TestClient):
     assert isinstance(opportunities, list)
     assert len(opportunities) > 0
     # Ensure they are sorted by estimated_potential descending
-    potentials = [item["estimated_potential"] for item in opportunities]
+    # Extract numeric sales_value from estimated_potential dict for comparison
+    potentials = [
+        item.get("estimated_potential", {}).get("sales_value", 0)
+        if isinstance(item.get("estimated_potential"), dict)
+        else item.get("estimated_potential", 0)
+        for item in opportunities
+    ]
     assert potentials == sorted(potentials, reverse=True)
 
 
